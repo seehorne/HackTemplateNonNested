@@ -118,5 +118,15 @@
     "expects_input": "image",
     "description": "Helps find and read mtg cards.",
     "enabled": true
+  },
+  "12": {
+    "host": "127.0.0.1",
+    "port": 8013,
+    "name": "seeing_ai_short_text_processor",
+    "conda_env": "whatsai",
+    "dependencies": [],
+    "expects_input": "image",
+    "description": "Extracts short text from images similar to SeeingAI, using CPU-only OCR.",
+    "enabled": true
   }
 }

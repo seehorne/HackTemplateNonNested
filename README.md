@@ -46,6 +46,16 @@ The system includes several processors, ordered by complexity:
 - **Use Case**: Gesture recognition and finger counting
 - **Reference**: Adapted from Finger Counter using MediaPipe - https://github.com/HarshitDolu/Finger-Counter-using-mediapipe
 
+### SeeingAI Short Text Processor (ID: 12)
+- **Description**: Extracts short text from images similar to Microsoft's SeeingAI, using CPU-only OCR
+- **Dependencies**: None (EasyOCR automatically installed)
+- **Use Case**: Quick text reading for accessibility, similar to SeeingAI's short text feature
+- **Reference**: Uses EasyOCR for CPU-based text recognition
+- **Features**: 
+  - ⭐ **Out-of-View Detection** - Stops reading text when it moves outside the viewing area (cropped region)
+  - ⭐ **UI Element Filtering** - Automatically excludes common UI elements (buttons, controls) and focuses on content text
+- **Note**: First-time startup may take longer as EasyOCR downloads models automatically
+
 ## Setting Up Your Own Server
 
 ### Local Server Setup
@@ -81,6 +91,38 @@ The system includes several processors, ordered by complexity:
 5. Access the server:
    - Local access: `ws://localhost:8000/ws`
    - Remote access: Use localtunnel (https://github.com/localtunnel/localtunnel) to expose the port
+
+## Troubleshooting
+
+### Processor Connection Errors
+
+If you see errors like "Could not connect to the processor" for any processor:
+
+1. **Check processor logs**: Look in the `logs/` directory for processor-specific log files
+2. **Verify dependencies**: Ensure all required dependencies are installed in the conda environment
+3. **Check port availability**: Make sure the processor's port isn't already in use
+4. **Rebuild container**: If dependencies were recently added, rebuild with `docker-compose build`
+
+**Common fixes:**
+- For SeeingAI processor: Ensure EasyOCR is available in the whatsai conda environment
+- For other processors: Check the processor's specific dependencies in `resources/whatsai/pyproject.toml`
+
+### SeeingAI Short Text Processor Issues
+
+The SeeingAI processor (ID: 12) requires EasyOCR which downloads models on first use:
+
+- **First startup may be slow**: EasyOCR downloads models automatically (this is normal)
+- **Connection timeout**: If the processor takes too long to start, wait a few minutes and try again
+- **Missing dependency**: If you see import errors, rebuild the Docker container to install EasyOCR
+- **Out-of-view detection**: ⭐ Automatically detects when text moves outside the cropped viewing area
+  - Use cropping controls to focus on specific screen areas
+  - The processor will warn when text goes out of view
+  - Helps prevent reading text that's no longer visible to the user
+- **UI element filtering**: ⭐ New feature automatically excludes common UI elements
+  - Filters out buttons, controls, time stamps, percentages, and edge-positioned UI text
+  - Toggle "Filter UI Elements" checkbox to enable/disable this feature
+  - Focuses reading on actual content rather than interface elements
+  - Perfect for reading documents, articles, or content while ignoring camera controls, browser UI, etc.
 
 ### Deployment to RunPod
 
