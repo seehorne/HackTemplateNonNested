@@ -1,0 +1,84 @@
+WARNING ⚠️ user config directory '/root/.config/Ultralytics' is not writeable, using '/tmp/Ultralytics'. Set YOLO_CONFIG_DIR to override.
+Creating new Ultralytics Settings v0.0.6 file ✅ 
+View Ultralytics Settings with 'yolo settings' or at '/tmp/Ultralytics/settings.json'
+Update Settings with 'yolo settings key=value', i.e. 'yolo settings runs_dir=path/to/dir'. For help see https://docs.ultralytics.com/quickstart/#ultralytics-settings.
+INFO:     Started server process [70]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8005 (Press CTRL+C to quit)
+
+0: 384x640 1 person, 210.3ms
+Speed: 8.6ms preprocess, 210.3ms inference, 7.5ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:36944 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 1 person, 119.9ms
+Speed: 1.2ms preprocess, 119.9ms inference, 1.2ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:36944 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 1 person, 87.2ms
+Speed: 0.8ms preprocess, 87.2ms inference, 0.7ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:36944 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 1 person, 87.2ms
+Speed: 0.9ms preprocess, 87.2ms inference, 0.7ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:36944 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 1 person, 93.8ms
+Speed: 0.9ms preprocess, 93.8ms inference, 0.7ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:36944 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 1 person, 91.9ms
+Speed: 0.8ms preprocess, 91.9ms inference, 0.9ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:36944 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 1 person, 87.1ms
+Speed: 0.8ms preprocess, 87.1ms inference, 0.8ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:36944 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 1 person, 97.6ms
+Speed: 1.1ms preprocess, 97.6ms inference, 0.7ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:36944 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 1 person, 87.9ms
+Speed: 0.9ms preprocess, 87.9ms inference, 0.7ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:36944 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 1 person, 88.7ms
+Speed: 1.3ms preprocess, 88.7ms inference, 0.8ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:36944 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 1 person, 84.1ms
+Speed: 0.9ms preprocess, 84.1ms inference, 0.7ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:36944 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 1 person, 84.4ms
+Speed: 1.1ms preprocess, 84.4ms inference, 0.7ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:36944 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 1 person, 83.7ms
+Speed: 0.9ms preprocess, 83.7ms inference, 0.8ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:36944 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 1 person, 84.1ms
+Speed: 0.9ms preprocess, 84.1ms inference, 0.7ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:36944 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 (no detections), 131.7ms
+Speed: 2.8ms preprocess, 131.7ms inference, 0.6ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:59040 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 (no detections), 86.8ms
+Speed: 0.8ms preprocess, 86.8ms inference, 0.2ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:59040 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 (no detections), 163.2ms
+Speed: 1.1ms preprocess, 163.2ms inference, 0.2ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:59040 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 (no detections), 483.2ms
+Speed: 6.4ms preprocess, 483.2ms inference, 0.2ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:59040 - "POST /process HTTP/1.1" 200 OK
+
+0: 384x640 (no detections), 122.2ms
+Speed: 1.1ms preprocess, 122.2ms inference, 0.2ms postprocess per image at shape (1, 3, 384, 640)
+INFO:     127.0.0.1:59040 - "POST /process HTTP/1.1" 200 OK
