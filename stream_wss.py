@@ -227,6 +227,7 @@ class ConnectionManager:
         self.current_image_for_processing: Optional[str] = None
         self.current_point_cloud_for_processing: Optional[Dict] = None
         self.current_viewing_bounds: Optional[Dict] = None  # New: store viewing bounds
+        self.current_ui_filtering: Optional[bool] = None    # New: store UI filtering preference
         self.final_image_to_client: Optional[str] = None
         self.final_result_to_client: Union[str, Dict, None] = None
         self.target_processor_id_for_current_request: Optional[int] = None
@@ -444,6 +445,7 @@ class ConnectionManager:
                 point_cloud = message.get("point_cloud")
                 processor_id = message.get("processor")
                 viewing_bounds = message.get("viewing_bounds")  # New: extract viewing bounds
+                exclude_ui_elements = message.get("exclude_ui_elements")  # New: extract UI filtering preference
                 
                 # Store the last image frame for potential Gemini tool calls
                 if image_b64:
@@ -451,7 +453,7 @@ class ConnectionManager:
                 
                 if processor_id is not None:
                     response_data = await self.execute_request(
-                        processor_id, image_b64, point_cloud, viewing_bounds
+                        processor_id, image_b64, point_cloud, viewing_bounds, exclude_ui_elements
                     )
                     await websocket.send_text(json.dumps(response_data))
                 
@@ -462,10 +464,11 @@ class ConnectionManager:
                     "error": f"Processing error: {str(e)}"
                 }))
 
-    async def execute_request(self, target_processor_id: int, initial_image_b64: Optional[str], initial_point_cloud_json: Optional[Dict] = None, viewing_bounds: Optional[Dict] = None) -> Dict:
+    async def execute_request(self, target_processor_id: int, initial_image_b64: Optional[str], initial_point_cloud_json: Optional[Dict] = None, viewing_bounds: Optional[Dict] = None, exclude_ui_elements: Optional[bool] = None) -> Dict:
         self.current_image_for_processing = initial_image_b64
         self.current_point_cloud_for_processing = initial_point_cloud_json
         self.current_viewing_bounds = viewing_bounds  # Store viewing bounds
+        self.current_ui_filtering = exclude_ui_elements  # Store UI filtering preference
         self.final_image_to_client = initial_image_b64
         self.final_result_to_client = None
         self.target_processor_id_for_current_request = target_processor_id
@@ -503,6 +506,10 @@ class ConnectionManager:
                     if (proc_id_to_run == 12 or processor_name == "seeing_ai_short_text_processor") and self.current_viewing_bounds:
                         payload_for_current_node["viewing_bounds"] = self.current_viewing_bounds
                         log_message(f"Added viewing bounds to {processor_name}: {self.current_viewing_bounds}")
+                    # Add UI filtering preference for SeeingAI processor
+                    if (proc_id_to_run == 12 or processor_name == "seeing_ai_short_text_processor") and self.current_ui_filtering is not None:
+                        payload_for_current_node["exclude_ui_elements"] = self.current_ui_filtering
+                        log_message(f"Added UI filtering preference to {processor_name}: {self.current_ui_filtering}")
                 else:
                     err = f"{processor_name} expects an image, but none is available."
                     self.final_result_to_client = {"error": err}

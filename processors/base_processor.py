@@ -10,6 +10,7 @@ class ProcessRequest(BaseModel):
     image: Optional[str] = None       # Base64 encoded image
     point_cloud: Optional[Dict] = None # JSON serializable point cloud data
     viewing_bounds: Optional[Dict] = None  # Optional cropping/viewing bounds {left, right, top, bottom} as percentages
+    exclude_ui_elements: Optional[bool] = None  # Optional UI filtering control
     # processor_specific_args: Optional[Dict] = None # For future use
 
 class BaseProcessor(ABC):
@@ -34,6 +35,14 @@ class BaseProcessor(ABC):
                     # Check if processor supports viewing bounds
                     if hasattr(self, 'process_frame_with_bounds') and request.viewing_bounds:
                         processed_visual_output, result_payload = self.process_frame_with_bounds(frame, request.viewing_bounds)
+                    elif hasattr(self, 'process_frame_with_options') and (request.viewing_bounds or request.exclude_ui_elements is not None):
+                        # For processors that support additional options
+                        options = {}
+                        if request.viewing_bounds:
+                            options['viewing_bounds'] = request.viewing_bounds
+                        if request.exclude_ui_elements is not None:
+                            options['exclude_ui_elements'] = request.exclude_ui_elements
+                        processed_visual_output, result_payload = self.process_frame_with_options(frame, options)
                     else:
                         processed_visual_output, result_payload = self.process_frame(frame)
 

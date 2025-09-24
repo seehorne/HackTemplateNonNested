@@ -51,7 +51,9 @@ The system includes several processors, ordered by complexity:
 - **Dependencies**: None (EasyOCR automatically installed)
 - **Use Case**: Quick text reading for accessibility, similar to SeeingAI's short text feature
 - **Reference**: Uses EasyOCR for CPU-based text recognition
-- **New Feature**: ⭐ **Out-of-View Detection** - Stops reading text when it moves outside the viewing area (cropped region)
+- **Features**: 
+  - ⭐ **Out-of-View Detection** - Stops reading text when it moves outside the viewing area (cropped region)
+  - ⭐ **UI Element Filtering** - Automatically excludes common UI elements (buttons, controls) and focuses on content text
 - **Note**: First-time startup may take longer as EasyOCR downloads models automatically
 
 ## Setting Up Your Own Server
@@ -112,10 +114,15 @@ The SeeingAI processor (ID: 12) requires EasyOCR which downloads models on first
 - **First startup may be slow**: EasyOCR downloads models automatically (this is normal)
 - **Connection timeout**: If the processor takes too long to start, wait a few minutes and try again
 - **Missing dependency**: If you see import errors, rebuild the Docker container to install EasyOCR
-- **Out-of-view detection**: ⭐ New feature automatically detects when text moves outside the cropped viewing area
+- **Out-of-view detection**: ⭐ Automatically detects when text moves outside the cropped viewing area
   - Use cropping controls to focus on specific screen areas
   - The processor will warn when text goes out of view
   - Helps prevent reading text that's no longer visible to the user
+- **UI element filtering**: ⭐ New feature automatically excludes common UI elements
+  - Filters out buttons, controls, time stamps, percentages, and edge-positioned UI text
+  - Toggle "Filter UI Elements" checkbox to enable/disable this feature
+  - Focuses reading on actual content rather than interface elements
+  - Perfect for reading documents, articles, or content while ignoring camera controls, browser UI, etc.
 
 ### Deployment to RunPod
 
