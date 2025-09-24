@@ -46,6 +46,12 @@ The system includes several processors, ordered by complexity:
 - **Use Case**: Gesture recognition and finger counting
 - **Reference**: Adapted from Finger Counter using MediaPipe - https://github.com/HarshitDolu/Finger-Counter-using-mediapipe
 
+### SeeingAI Short Text Processor (ID: 12)
+- **Description**: Extracts short text from images similar to Microsoft's SeeingAI, using CPU-only OCR
+- **Dependencies**: None
+- **Use Case**: Quick text reading for accessibility, similar to SeeingAI's short text feature
+- **Reference**: Uses EasyOCR for CPU-based text recognition
+
 ## Setting Up Your Own Server
 
 ### Local Server Setup
