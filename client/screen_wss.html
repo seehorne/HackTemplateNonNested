@@ -1401,7 +1401,18 @@
                 
                 const dataUrl = tempCanvas.toDataURL('image/jpeg', 100 / 100);
                 if (websocket && websocket.readyState === WebSocket.OPEN) {
-                    websocket.send(JSON.stringify({ image: dataUrl, processor: parseInt(currentProcessor) }));
+                    // Include cropping bounds for processors that support out-of-view detection
+                    const message = { 
+                        image: dataUrl, 
+                        processor: parseInt(currentProcessor),
+                        viewing_bounds: {
+                            left: cropSettings[0],
+                            right: cropSettings[1], 
+                            top: cropSettings[2],
+                            bottom: cropSettings[3]
+                        }
+                    };
+                    websocket.send(JSON.stringify(message));
                 }
                 isWaitingForResponse = false;
             } catch (error) { console.error("Error capturing or sending frame:", error); isWaitingForResponse = false; setTimeout(captureAndSendFrame, 1000); }

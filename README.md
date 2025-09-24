@@ -51,6 +51,7 @@ The system includes several processors, ordered by complexity:
 - **Dependencies**: None (EasyOCR automatically installed)
 - **Use Case**: Quick text reading for accessibility, similar to SeeingAI's short text feature
 - **Reference**: Uses EasyOCR for CPU-based text recognition
+- **New Feature**: ⭐ **Out-of-View Detection** - Stops reading text when it moves outside the viewing area (cropped region)
 - **Note**: First-time startup may take longer as EasyOCR downloads models automatically
 
 ## Setting Up Your Own Server
@@ -111,6 +112,10 @@ The SeeingAI processor (ID: 12) requires EasyOCR which downloads models on first
 - **First startup may be slow**: EasyOCR downloads models automatically (this is normal)
 - **Connection timeout**: If the processor takes too long to start, wait a few minutes and try again
 - **Missing dependency**: If you see import errors, rebuild the Docker container to install EasyOCR
+- **Out-of-view detection**: ⭐ New feature automatically detects when text moves outside the cropped viewing area
+  - Use cropping controls to focus on specific screen areas
+  - The processor will warn when text goes out of view
+  - Helps prevent reading text that's no longer visible to the user
 
 ### Deployment to RunPod
 
