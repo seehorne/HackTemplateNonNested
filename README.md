@@ -48,9 +48,10 @@ The system includes several processors, ordered by complexity:
 
 ### SeeingAI Short Text Processor (ID: 12)
 - **Description**: Extracts short text from images similar to Microsoft's SeeingAI, using CPU-only OCR
-- **Dependencies**: None
+- **Dependencies**: None (EasyOCR automatically installed)
 - **Use Case**: Quick text reading for accessibility, similar to SeeingAI's short text feature
 - **Reference**: Uses EasyOCR for CPU-based text recognition
+- **Note**: First-time startup may take longer as EasyOCR downloads models automatically
 
 ## Setting Up Your Own Server
 
@@ -87,6 +88,29 @@ The system includes several processors, ordered by complexity:
 5. Access the server:
    - Local access: `ws://localhost:8000/ws`
    - Remote access: Use localtunnel (https://github.com/localtunnel/localtunnel) to expose the port
+
+## Troubleshooting
+
+### Processor Connection Errors
+
+If you see errors like "Could not connect to the processor" for any processor:
+
+1. **Check processor logs**: Look in the `logs/` directory for processor-specific log files
+2. **Verify dependencies**: Ensure all required dependencies are installed in the conda environment
+3. **Check port availability**: Make sure the processor's port isn't already in use
+4. **Rebuild container**: If dependencies were recently added, rebuild with `docker-compose build`
+
+**Common fixes:**
+- For SeeingAI processor: Ensure EasyOCR is available in the whatsai conda environment
+- For other processors: Check the processor's specific dependencies in `resources/whatsai/pyproject.toml`
+
+### SeeingAI Short Text Processor Issues
+
+The SeeingAI processor (ID: 12) requires EasyOCR which downloads models on first use:
+
+- **First startup may be slow**: EasyOCR downloads models automatically (this is normal)
+- **Connection timeout**: If the processor takes too long to start, wait a few minutes and try again
+- **Missing dependency**: If you see import errors, rebuild the Docker container to install EasyOCR
 
 ### Deployment to RunPod
 

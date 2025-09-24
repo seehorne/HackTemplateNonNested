@@ -4,8 +4,15 @@ import cv2
 import os
 from typing import Dict, Union, Tuple, List, Optional
 from PIL import Image
-import easyocr
 import re
+
+# Try to import EasyOCR with helpful error message
+try:
+    import easyocr
+    EASYOCR_AVAILABLE = True
+except ImportError as e:
+    EASYOCR_AVAILABLE = False
+    EASYOCR_IMPORT_ERROR = str(e)
 
 class SeeingAIShortTextProcessor(BaseProcessor):
     def __init__(self,
@@ -23,6 +30,12 @@ class SeeingAIShortTextProcessor(BaseProcessor):
             max_output_length (int): Maximum output length for short text format
         """
         super().__init__()
+        
+        # Check EasyOCR availability first
+        if not EASYOCR_AVAILABLE:
+            error_msg = f"EasyOCR is not available. Please install it with: pip install easyocr\nOriginal error: {EASYOCR_IMPORT_ERROR}"
+            print(f"ERROR: {error_msg}")
+            raise ImportError(error_msg)
         
         # Force CPU usage as per requirements (no CUDA)
         self.use_gpu = False
