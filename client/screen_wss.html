@@ -485,6 +485,8 @@
         let utteranceQueue = [];
         const MAX_UTTERANCE_QUEUE_SIZE = 2;
         let lastSpokenText = "";
+        let recentlySpokenTexts = new Map(); // Map of text -> timestamp when it was last spoken
+        const REPEAT_PREVENTION_WINDOW = 3000; // Don't repeat same text within 3 seconds
         let userSpeechRate = 1.0; // User-controlled base speech rate (from slider, range 0.5 to 2.0)
         const MAX_SPEECH_RATE = 2.5; // Maximum speech rate
         const RATE_INCREMENT = 0.25; // How much to speed up for each item in the queue
@@ -527,6 +529,10 @@
             // Get the next text from the front of the queue.
             const textToSpeak = utteranceQueue.shift(); 
             lastSpokenText = textToSpeak;
+            
+            // Record this text as recently spoken
+            recentlySpokenTexts.set(textToSpeak, Date.now());
+            
             const utterance = new SpeechSynthesisUtterance(textToSpeak);
 
             // Dynamically adjust the speech rate based on the user preference and queue length
@@ -555,6 +561,7 @@
         /**
          * Adds text to a queue to be spoken sequentially.
          * Adjusts speech rate based on queue length.
+         * Prevents repeating the same text within a time window.
          * @param {string} text The text to be spoken.
          * @param {number} [panValue=-1] The panning value (currently unused by Web Speech API).
          */
@@ -571,18 +578,45 @@
                 return;
             }
             
+            // Check if this text is already in the queue
             const lastItemInQueue = utteranceQueue.length > 0 ? utteranceQueue[utteranceQueue.length - 1] : null;
-            if (text === lastItemInQueue) { return; }
-            if (utteranceQueue.length === 0 && speechSynthesis.speaking && text === lastSpokenText) { return; }
+            if (text === lastItemInQueue) { 
+                console.log("Skipping duplicate text already in queue:", text);
+                return; 
+            }
             
-            // --- NEW: Enforce Max Queue Size ---
+            // Check if currently speaking this same text
+            if (utteranceQueue.length === 0 && speechSynthesis.speaking && text === lastSpokenText) { 
+                console.log("Skipping text that is currently being spoken:", text);
+                return; 
+            }
+            
+            // Check if this text was recently spoken (within the prevention window)
+            const now = Date.now();
+            const lastSpokenTime = recentlySpokenTexts.get(text);
+            if (lastSpokenTime && (now - lastSpokenTime) < REPEAT_PREVENTION_WINDOW) {
+                const timeRemaining = Math.ceil((REPEAT_PREVENTION_WINDOW - (now - lastSpokenTime)) / 1000);
+                console.log(`Skipping recently spoken text (will allow again in ${timeRemaining}s):`, text);
+                return;
+            }
+            
+            // Clean up old entries from recentlySpokenTexts to prevent memory buildup
+            for (const [spokenText, timestamp] of recentlySpokenTexts.entries()) {
+                if (now - timestamp > REPEAT_PREVENTION_WINDOW) {
+                    recentlySpokenTexts.delete(spokenText);
+                }
+            }
+            
+            // --- Enforce Max Queue Size ---
             if (utteranceQueue.length >= MAX_UTTERANCE_QUEUE_SIZE) {
                 // The queue is full. Remove the oldest item to make room for the new one.
                 utteranceQueue.shift(); 
                 console.log("Queue full. Dropping oldest utterance to prioritize new one.");
             }
+            
             // Add the new text to the end of the queue.
             utteranceQueue.push(text);
+            console.log("Added to speech queue:", text);
             
             // If the synthesizer isn't currently speaking, start processing the queue.
             if (!speechSynthesis.speaking) {

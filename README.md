@@ -51,7 +51,10 @@ The system includes several processors, ordered by complexity:
 - **Dependencies**: None (EasyOCR automatically installed)
 - **Use Case**: Quick text reading for accessibility, similar to SeeingAI's short text feature
 - **Reference**: Uses EasyOCR for CPU-based text recognition
-- **New Feature**: ⭐ **Out-of-View Detection** - Stops reading text when it moves outside the viewing area (cropped region)
+- **Features**:
+  - ⭐ **Out-of-View Detection** - Stops reading text when it moves outside the viewing area (cropped region)
+  - ⭐ **Adjustable Speech Rate** - Control TTS speed from 0.5x to 2.0x using Alt+V keyboard shortcut
+  - ⭐ **No Text Repetition** - Prevents reading the same text multiple times (3-second prevention window)
 - **Note**: First-time startup may take longer as EasyOCR downloads models automatically
 
 ## Setting Up Your Own Server
