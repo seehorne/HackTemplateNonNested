@@ -54,7 +54,10 @@ The system includes several processors, ordered by complexity:
 - **Features**:
   - ⭐ **Out-of-View Detection** - Stops reading text when it moves outside the viewing area (cropped region)
   - ⭐ **Adjustable Speech Rate** - Control TTS speed from 0.5x to 2.0x using Alt+V keyboard shortcut
-  - ⭐ **No Text Repetition** - Prevents reading the same text multiple times (3-second prevention window)
+  - ⭐ **Smart Text Repetition Prevention** - Prevents reading the same text multiple times with:
+    - 10-second prevention window (won't repeat text within 10 seconds)
+    - Normalized text comparison (handles minor OCR variations like extra spaces or case differences)
+    - Queue and current speech checking to avoid duplicates
 - **Note**: First-time startup may take longer as EasyOCR downloads models automatically
 
 ## Setting Up Your Own Server

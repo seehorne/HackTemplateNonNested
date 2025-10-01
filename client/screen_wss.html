@@ -486,7 +486,7 @@
         const MAX_UTTERANCE_QUEUE_SIZE = 2;
         let lastSpokenText = "";
         let recentlySpokenTexts = new Map(); // Map of text -> timestamp when it was last spoken
-        const REPEAT_PREVENTION_WINDOW = 3000; // Don't repeat same text within 3 seconds
+        const REPEAT_PREVENTION_WINDOW = 10000; // Don't repeat same text within 10 seconds
         let userSpeechRate = 1.0; // User-controlled base speech rate (from slider, range 0.5 to 2.0)
         const MAX_SPEECH_RATE = 2.5; // Maximum speech rate
         const RATE_INCREMENT = 0.25; // How much to speed up for each item in the queue
@@ -530,8 +530,9 @@
             const textToSpeak = utteranceQueue.shift(); 
             lastSpokenText = textToSpeak;
             
-            // Record this text as recently spoken
-            recentlySpokenTexts.set(textToSpeak, Date.now());
+            // Record this text as recently spoken using normalized version
+            const normalizedTextToSpeak = normalizeTextForComparison(textToSpeak);
+            recentlySpokenTexts.set(normalizedTextToSpeak, Date.now());
             
             const utterance = new SpeechSynthesisUtterance(textToSpeak);
 
@@ -559,6 +560,15 @@
         }
 
         /**
+         * Normalize text for comparison to handle minor OCR variations
+         * @param {string} text The text to normalize
+         * @returns {string} Normalized text
+         */
+        function normalizeTextForComparison(text) {
+            return text.trim().toLowerCase().replace(/\s+/g, ' ');
+        }
+
+        /**
          * Adds text to a queue to be spoken sequentially.
          * Adjusts speech rate based on queue length.
          * Prevents repeating the same text within a time window.
@@ -578,22 +588,27 @@
                 return;
             }
             
-            // Check if this text is already in the queue
+            // Normalize text for comparison to handle minor OCR variations
+            const normalizedText = normalizeTextForComparison(text);
+            
+            // Check if this text is already in the queue (using normalized comparison)
             const lastItemInQueue = utteranceQueue.length > 0 ? utteranceQueue[utteranceQueue.length - 1] : null;
-            if (text === lastItemInQueue) { 
+            if (lastItemInQueue && normalizedText === normalizeTextForComparison(lastItemInQueue)) { 
                 console.log("Skipping duplicate text already in queue:", text);
                 return; 
             }
             
-            // Check if currently speaking this same text
-            if (utteranceQueue.length === 0 && speechSynthesis.speaking && text === lastSpokenText) { 
+            // Check if currently speaking this same text (using normalized comparison)
+            if (utteranceQueue.length === 0 && speechSynthesis.speaking && lastSpokenText && 
+                normalizedText === normalizeTextForComparison(lastSpokenText)) { 
                 console.log("Skipping text that is currently being spoken:", text);
                 return; 
             }
             
             // Check if this text was recently spoken (within the prevention window)
+            // Use normalized text as the key for more reliable matching
             const now = Date.now();
-            const lastSpokenTime = recentlySpokenTexts.get(text);
+            const lastSpokenTime = recentlySpokenTexts.get(normalizedText);
             if (lastSpokenTime && (now - lastSpokenTime) < REPEAT_PREVENTION_WINDOW) {
                 const timeRemaining = Math.ceil((REPEAT_PREVENTION_WINDOW - (now - lastSpokenTime)) / 1000);
                 console.log(`Skipping recently spoken text (will allow again in ${timeRemaining}s):`, text);
