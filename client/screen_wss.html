@@ -526,6 +526,14 @@
                 return;
             }
 
+            // Safety check: if speechSynthesis is already speaking but we're trying to start again,
+            // wait a bit and retry (prevents the queue from getting stuck)
+            if (speechSynthesis.speaking) {
+                console.log("Speech synthesis still speaking, waiting before processing next item...");
+                setTimeout(() => processSpeechQueue(), 100);
+                return;
+            }
+
             // Get the next text from the front of the queue.
             const textToSpeak = utteranceQueue.shift(); 
             lastSpokenText = textToSpeak;
@@ -557,6 +565,15 @@
             };
 
             speechSynthesis.speak(utterance);
+            
+            // Failsafe: if onend doesn't fire within reasonable time, force queue processing
+            // This prevents the queue from getting permanently stuck
+            setTimeout(() => {
+                if (utteranceQueue.length > 0 && !speechSynthesis.speaking) {
+                    console.warn("Speech synthesis appears stuck. Forcing queue processing...");
+                    processSpeechQueue();
+                }
+            }, 10000); // 10 second timeout for long utterances
         }
 
         /**
@@ -634,7 +651,8 @@
             console.log("Added to speech queue:", text);
             
             // If the synthesizer isn't currently speaking, start processing the queue.
-            if (!speechSynthesis.speaking) {
+            // Also trigger if we have items in queue but synthesis appears stuck
+            if (!speechSynthesis.speaking || (utteranceQueue.length > 1 && !speechSynthesis.pending)) {
                 processSpeechQueue();
             }
         }
