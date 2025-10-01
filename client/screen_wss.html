@@ -360,6 +360,13 @@
             </div>
             
             <div class="setting-row">
+                <label for="speechRateSlider" class="setting-label">Speech Rate (Alt+V):</label>
+                <input type="range" id="speechRateSlider" min="50" max="200" value="100" step="10" aria-valuetext="Speech rate: 1.0x normal speed" aria-describedby="speechRateSliderDesc">
+                <span id="speechRateValue" aria-hidden="true">1.0x</span>
+                <p id="speechRateSliderDesc" class="hidden">Adjust text-to-speech reading speed from 0.5x (slow) to 2.0x (fast). Default is 1.0x normal speed.</p>
+            </div>
+            
+            <div class="setting-row">
                 <label class="setting-label" id="screenSelectionLabel">Screen Selection:</label>
                 <button id="selectScreenButton" type="button" class="select-screen" aria-describedby="screenSelectionLabel">Select Screen to Share</button>
                 <span id="screenStatus" aria-live="polite">No screen selected</span>
@@ -444,6 +451,8 @@
         const refreshAudioButton = document.getElementById('refreshAudioButton');
         const qualitySlider = document.getElementById('qualitySlider');
         const qualityValue = document.getElementById('qualityValue');
+        const speechRateSlider = document.getElementById('speechRateSlider');
+        const speechRateValue = document.getElementById('speechRateValue');
         const selectScreenButton = document.getElementById('selectScreenButton');
         const screenStatus = document.getElementById('screenStatus');
         const responseText = document.getElementById('responseText');
@@ -476,7 +485,9 @@
         let utteranceQueue = [];
         const MAX_UTTERANCE_QUEUE_SIZE = 2;
         let lastSpokenText = "";
-        const BASE_SPEECH_RATE = 1.75; // Base speech rate
+        let recentlySpokenTexts = new Map(); // Map of text -> timestamp when it was last spoken
+        const REPEAT_PREVENTION_WINDOW = 10000; // Don't repeat same text within 10 seconds
+        let userSpeechRate = 1.0; // User-controlled base speech rate (from slider, range 0.5 to 2.0)
         const MAX_SPEECH_RATE = 2.5; // Maximum speech rate
         const RATE_INCREMENT = 0.25; // How much to speed up for each item in the queue
         
@@ -515,14 +526,27 @@
                 return;
             }
 
+            // Safety check: if speechSynthesis is already speaking but we're trying to start again,
+            // wait a bit and retry (prevents the queue from getting stuck)
+            if (speechSynthesis.speaking) {
+                console.log("Speech synthesis still speaking, waiting before processing next item...");
+                setTimeout(() => processSpeechQueue(), 100);
+                return;
+            }
+
             // Get the next text from the front of the queue.
             const textToSpeak = utteranceQueue.shift(); 
             lastSpokenText = textToSpeak;
+            
+            // Record this text as recently spoken using normalized version
+            const normalizedTextToSpeak = normalizeTextForComparison(textToSpeak);
+            recentlySpokenTexts.set(normalizedTextToSpeak, Date.now());
+            
             const utterance = new SpeechSynthesisUtterance(textToSpeak);
 
-            // Dynamically adjust the speech rate based on the number of pending items.
+            // Dynamically adjust the speech rate based on the user preference and queue length
             const queueLength = utteranceQueue.length;
-            let dynamicRate = BASE_SPEECH_RATE + (queueLength * RATE_INCREMENT);
+            let dynamicRate = userSpeechRate + (queueLength * RATE_INCREMENT);
             
             // Cap the rate at the defined maximum.
             utterance.rate = Math.min(dynamicRate, MAX_SPEECH_RATE);
@@ -541,11 +565,30 @@
             };
 
             speechSynthesis.speak(utterance);
+            
+            // Failsafe: if onend doesn't fire within reasonable time, force queue processing
+            // This prevents the queue from getting permanently stuck
+            setTimeout(() => {
+                if (utteranceQueue.length > 0 && !speechSynthesis.speaking) {
+                    console.warn("Speech synthesis appears stuck. Forcing queue processing...");
+                    processSpeechQueue();
+                }
+            }, 10000); // 10 second timeout for long utterances
+        }
+
+        /**
+         * Normalize text for comparison to handle minor OCR variations
+         * @param {string} text The text to normalize
+         * @returns {string} Normalized text
+         */
+        function normalizeTextForComparison(text) {
+            return text.trim().toLowerCase().replace(/\s+/g, ' ');
         }
 
         /**
          * Adds text to a queue to be spoken sequentially.
          * Adjusts speech rate based on queue length.
+         * Prevents repeating the same text within a time window.
          * @param {string} text The text to be spoken.
          * @param {number} [panValue=-1] The panning value (currently unused by Web Speech API).
          */
@@ -562,21 +605,54 @@
                 return;
             }
             
-            const lastItemInQueue = utteranceQueue.length > 0 ? utteranceQueue[utteranceQueue.length - 1] : null;
-            if (text === lastItemInQueue) { return; }
-            if (utteranceQueue.length === 0 && speechSynthesis.speaking && text === lastSpokenText) { return; }
+            // Normalize text for comparison to handle minor OCR variations
+            const normalizedText = normalizeTextForComparison(text);
             
-            // --- NEW: Enforce Max Queue Size ---
+            // Check if this text is already in the queue (using normalized comparison)
+            const lastItemInQueue = utteranceQueue.length > 0 ? utteranceQueue[utteranceQueue.length - 1] : null;
+            if (lastItemInQueue && normalizedText === normalizeTextForComparison(lastItemInQueue)) { 
+                console.log("Skipping duplicate text already in queue:", text);
+                return; 
+            }
+            
+            // Check if currently speaking this same text (using normalized comparison)
+            if (utteranceQueue.length === 0 && speechSynthesis.speaking && lastSpokenText && 
+                normalizedText === normalizeTextForComparison(lastSpokenText)) { 
+                console.log("Skipping text that is currently being spoken:", text);
+                return; 
+            }
+            
+            // Check if this text was recently spoken (within the prevention window)
+            // Use normalized text as the key for more reliable matching
+            const now = Date.now();
+            const lastSpokenTime = recentlySpokenTexts.get(normalizedText);
+            if (lastSpokenTime && (now - lastSpokenTime) < REPEAT_PREVENTION_WINDOW) {
+                const timeRemaining = Math.ceil((REPEAT_PREVENTION_WINDOW - (now - lastSpokenTime)) / 1000);
+                console.log(`Skipping recently spoken text (will allow again in ${timeRemaining}s):`, text);
+                return;
+            }
+            
+            // Clean up old entries from recentlySpokenTexts to prevent memory buildup
+            for (const [spokenText, timestamp] of recentlySpokenTexts.entries()) {
+                if (now - timestamp > REPEAT_PREVENTION_WINDOW) {
+                    recentlySpokenTexts.delete(spokenText);
+                }
+            }
+            
+            // --- Enforce Max Queue Size ---
             if (utteranceQueue.length >= MAX_UTTERANCE_QUEUE_SIZE) {
                 // The queue is full. Remove the oldest item to make room for the new one.
                 utteranceQueue.shift(); 
                 console.log("Queue full. Dropping oldest utterance to prioritize new one.");
             }
+            
             // Add the new text to the end of the queue.
             utteranceQueue.push(text);
+            console.log("Added to speech queue:", text);
             
             // If the synthesizer isn't currently speaking, start processing the queue.
-            if (!speechSynthesis.speaking) {
+            // Also trigger if we have items in queue but synthesis appears stuck
+            if (!speechSynthesis.speaking || (utteranceQueue.length > 1 && !speechSynthesis.pending)) {
                 processSpeechQueue();
             }
         }
@@ -994,6 +1070,14 @@
             }
         });
         qualitySlider.addEventListener('input', () => { quality = parseInt(qualitySlider.value); qualityValue.textContent = quality; qualitySlider.setAttribute('aria-valuetext', `${quality} percent quality`); });
+        speechRateSlider.addEventListener('input', () => { 
+            const sliderValue = parseInt(speechRateSlider.value);
+            userSpeechRate = sliderValue / 100; // Convert 50-200 range to 0.5-2.0
+            const rateDisplay = userSpeechRate.toFixed(1) + 'x';
+            speechRateValue.textContent = rateDisplay; 
+            speechRateSlider.setAttribute('aria-valuetext', `Speech rate: ${rateDisplay} ${userSpeechRate < 1 ? 'slower' : userSpeechRate > 1 ? 'faster' : 'normal speed'}`); 
+            updateStatus(`Speech rate set to ${rateDisplay}`);
+        });
         processorSelect.addEventListener('change', () => { currentProcessor = parseInt(processorSelect.value); updateStatus(`Selected processor: ${processorSelect.options[processorSelect.selectedIndex].text}`); });
         audioInputSelect.addEventListener('change', () => { selectedAudioDeviceId = audioInputSelect.value || null; updateStatus(`Selected audio input: ${audioInputSelect.options[audioInputSelect.selectedIndex].text}`); if (isAudioStreaming) { restartAudioStreaming(); } });
         // MODIFIED: Update crop value display functions to show percentages AND trigger preview update
@@ -1039,7 +1123,8 @@
                     case 's': toggleStreaming(); break; case 'm': toggleMute(); break;
                     case 'a': toggleAudioStreaming(); break; case 'p': processorSelect.focus(); break;
                     case 'i': audioInputSelect.focus(); break; case 'h': showHelp(); break;
-                    case 'q': qualitySlider.focus(); break; case 'l': leftCrop.focus(); break;
+                    case 'q': qualitySlider.focus(); break; case 'v': speechRateSlider.focus(); break;
+                    case 'l': leftCrop.focus(); break;
                     case 'r': rightCrop.focus(); break; case 't': topCrop.focus(); break;
                     case 'b': bottomCrop.focus(); break; case 'f': fetchProcessorsButton.focus(); break;
                 }
@@ -1401,7 +1486,18 @@
                 
                 const dataUrl = tempCanvas.toDataURL('image/jpeg', 100 / 100);
                 if (websocket && websocket.readyState === WebSocket.OPEN) {
-                    websocket.send(JSON.stringify({ image: dataUrl, processor: parseInt(currentProcessor) }));
+                    // Include cropping bounds for processors that support out-of-view detection
+                    const message = { 
+                        image: dataUrl, 
+                        processor: parseInt(currentProcessor),
+                        viewing_bounds: {
+                            left: cropSettings[0],
+                            right: cropSettings[1], 
+                            top: cropSettings[2],
+                            bottom: cropSettings[3]
+                        }
+                    };
+                    websocket.send(JSON.stringify(message));
                 }
                 isWaitingForResponse = false;
             } catch (error) { console.error("Error capturing or sending frame:", error); isWaitingForResponse = false; setTimeout(captureAndSendFrame, 1000); }
@@ -1493,7 +1589,14 @@
                     }
                 }
                 if (!wasHandledAsPointCloud) {
-                    const textForDisplay = (typeof data.text === 'string') ? data.text : "";
+                    // Handle different text formats
+                    let textForDisplay = "";
+                    if (typeof data.text === 'string') {
+                        textForDisplay = data.text;
+                    } else if (typeof data.text === 'object' && data.text !== null) {
+                        // Extract text from dict response (e.g., from SeeingAI processor with out-of-view detection)
+                        textForDisplay = data.text.text || data.text.full_text || JSON.stringify(data.text);
+                    }
                     if (responseText) { responseText.textContent = textForDisplay; }
                     if (textForDisplay.trim() !== "" && !isMuted) { speakWithPanning(textForDisplay, -1); }
                 }
@@ -1541,6 +1644,7 @@ Keyboard Controls:
 - Alt+F: Focus fetch processors button
 - Alt+H: Show this help dialog
 - Alt+Q: Focus quality slider
+- Alt+V: Focus speech rate slider (control reading speed)
 - Alt+L: Focus left cropping control
 - Alt+R: Focus right cropping control
 - Alt+T: Focus top cropping control
