@@ -360,13 +360,6 @@
             </div>
             
             <div class="setting-row">
-                <label for="speechRateSlider" class="setting-label">Speech Rate (Alt+V):</label>
-                <input type="range" id="speechRateSlider" min="0.5" max="2.0" step="0.1" value="1.0" aria-valuetext="1.0x speed" aria-describedby="speechRateSliderDesc">
-                <span id="speechRateValue" aria-hidden="true">1.0x</span>
-                <p id="speechRateSliderDesc" class="hidden">Adjust text-to-speech reading speed from 0.5x (slow) to 2.0x (fast)</p>
-            </div>
-            
-            <div class="setting-row">
                 <label class="setting-label" id="screenSelectionLabel">Screen Selection:</label>
                 <button id="selectScreenButton" type="button" class="select-screen" aria-describedby="screenSelectionLabel">Select Screen to Share</button>
                 <span id="screenStatus" aria-live="polite">No screen selected</span>
@@ -455,8 +448,6 @@
         const refreshAudioButton = document.getElementById('refreshAudioButton');
         const qualitySlider = document.getElementById('qualitySlider');
         const qualityValue = document.getElementById('qualityValue');
-        const speechRateSlider = document.getElementById('speechRateSlider');
-        const speechRateValue = document.getElementById('speechRateValue');
         const selectScreenButton = document.getElementById('selectScreenButton');
         const screenStatus = document.getElementById('screenStatus');
         const responseText = document.getElementById('responseText');
@@ -491,7 +482,7 @@
         let utteranceQueue = [];
         const MAX_UTTERANCE_QUEUE_SIZE = 2;
         let lastSpokenText = "";
-        let baseSpeechRate = 1.0; // Configurable base speech rate (default slower than before)
+        const BASE_SPEECH_RATE = 1.75; // Base speech rate
         const MAX_SPEECH_RATE = 2.5; // Maximum speech rate
         const RATE_INCREMENT = 0.25; // How much to speed up for each item in the queue
         
@@ -537,7 +528,7 @@
 
             // Dynamically adjust the speech rate based on the number of pending items.
             const queueLength = utteranceQueue.length;
-            let dynamicRate = baseSpeechRate + (queueLength * RATE_INCREMENT);
+            let dynamicRate = BASE_SPEECH_RATE + (queueLength * RATE_INCREMENT);
             
             // Cap the rate at the defined maximum.
             utterance.rate = Math.min(dynamicRate, MAX_SPEECH_RATE);
@@ -1010,12 +1001,6 @@
             }
         });
         qualitySlider.addEventListener('input', () => { quality = parseInt(qualitySlider.value); qualityValue.textContent = quality; qualitySlider.setAttribute('aria-valuetext', `${quality} percent quality`); });
-        speechRateSlider.addEventListener('input', () => { 
-            baseSpeechRate = parseFloat(speechRateSlider.value); 
-            speechRateValue.textContent = `${baseSpeechRate.toFixed(1)}x`; 
-            speechRateSlider.setAttribute('aria-valuetext', `${baseSpeechRate.toFixed(1)}x speed`); 
-            updateStatus(`Speech rate set to ${baseSpeechRate.toFixed(1)}x`);
-        });
         processorSelect.addEventListener('change', () => { currentProcessor = parseInt(processorSelect.value); updateStatus(`Selected processor: ${processorSelect.options[processorSelect.selectedIndex].text}`); });
         audioInputSelect.addEventListener('change', () => { selectedAudioDeviceId = audioInputSelect.value || null; updateStatus(`Selected audio input: ${audioInputSelect.options[audioInputSelect.selectedIndex].text}`); if (isAudioStreaming) { restartAudioStreaming(); } });
         // MODIFIED: Update crop value display functions to show percentages AND trigger preview update
@@ -1061,8 +1046,7 @@
                     case 's': toggleStreaming(); break; case 'm': toggleMute(); break;
                     case 'a': toggleAudioStreaming(); break; case 'p': processorSelect.focus(); break;
                     case 'i': audioInputSelect.focus(); break; case 'h': showHelp(); break;
-                    case 'q': qualitySlider.focus(); break; case 'v': speechRateSlider.focus(); break;
-                    case 'l': leftCrop.focus(); break;
+                    case 'q': qualitySlider.focus(); break; case 'l': leftCrop.focus(); break;
                     case 'r': rightCrop.focus(); break; case 't': topCrop.focus(); break;
                     case 'b': bottomCrop.focus(); break; case 'f': fetchProcessorsButton.focus(); break;
                 }
@@ -1576,7 +1560,6 @@ Keyboard Controls:
 - Alt+F: Focus fetch processors button
 - Alt+H: Show this help dialog
 - Alt+Q: Focus quality slider
-- Alt+V: Focus speech rate slider (adjust TTS speed)
 - Alt+L: Focus left cropping control
 - Alt+R: Focus right cropping control
 - Alt+T: Focus top cropping control
@@ -1591,7 +1574,6 @@ Audio Features:
 - Audio device refresh for hot-plugged devices
 - Sound splitting: TTS plays on left channel, audio playback on right channel
 - Toggle sound splitting with checkbox
-- Adjustable speech rate: Use Alt+V to control text-to-speech speed (0.5x to 2.0x)
 
 Processor Modes:
 - Click "Fetch Processors" to load available processors from the server
@@ -1617,7 +1599,6 @@ Troubleshooting Tips:
         
         // MODIFIED: Initialize crop value displays with percentages
         qualityValue.textContent = quality;
-        speechRateValue.textContent = `${baseSpeechRate.toFixed(1)}x`;
         leftValue.textContent = `${cropSettings[0]}%`; 
         rightValue.textContent = `${cropSettings[1]}%`;
         topValue.textContent = `${cropSettings[2]}%`; 

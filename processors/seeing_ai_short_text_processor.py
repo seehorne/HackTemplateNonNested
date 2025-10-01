@@ -20,8 +20,7 @@ class SeeingAIShortTextProcessor(BaseProcessor):
                  use_gpu=False,  # Default to CPU as per requirements
                  min_text_length=3,
                  max_output_length=200,
-                 track_text_positions=True,  # New parameter for tracking
-                 exclude_ui_elements=True):  # New parameter for UI exclusion
+                 track_text_positions=True):  # New parameter for tracking
         """
         Initialize SeeingAI Short Text processor using EasyOCR for simple OCR
         
@@ -31,7 +30,6 @@ class SeeingAIShortTextProcessor(BaseProcessor):
             min_text_length (int): Minimum text length to include in output
             max_output_length (int): Maximum output length for short text format
             track_text_positions (bool): Whether to track text positions to stop reading when out of view
-            exclude_ui_elements (bool): Whether to exclude common UI elements from text reading
         """
         super().__init__()
         
@@ -49,7 +47,6 @@ class SeeingAIShortTextProcessor(BaseProcessor):
         self.min_text_length = min_text_length
         self.max_output_length = max_output_length
         self.track_text_positions = track_text_positions
-        self.exclude_ui_elements = exclude_ui_elements
         
         # Text tracking for out-of-view detection
         self.previous_text_regions = []  # Store previous frame's text regions
@@ -59,8 +56,6 @@ class SeeingAIShortTextProcessor(BaseProcessor):
         print(f"SeeingAI Short Text processor initialized (EasyOCR will be loaded on first use)")
         if track_text_positions:
             print("Text position tracking enabled - will stop reading when text goes out of view")
-        if exclude_ui_elements:
-            print("UI element exclusion enabled - will filter out common UI elements")
 
     def _get_reader(self):
         """
@@ -257,145 +252,6 @@ class SeeingAIShortTextProcessor(BaseProcessor):
         
         return False
         
-    def _is_text_ui_element(self, text: str, region: Dict) -> bool:
-        """
-        Determine if detected text is likely a UI element that should be excluded
-        
-        Args:
-            text (str): The detected text content
-            region (Dict): Text region with position information
-            
-        Returns:
-            bool: True if text appears to be a UI element
-        """
-        if not self.exclude_ui_elements:
-            return False
-        
-        text_lower = text.lower().strip()
-        
-        # Common UI button/control text patterns
-        ui_patterns = [
-            # Camera/video controls
-            'record', 'stop', 'pause', 'play', 'mute', 'unmute', 'volume',
-            'zoom in', 'zoom out', 'zoom', 'full screen', 'fullscreen',
-            'settings', 'options', 'menu', 'close', 'minimize', 'maximize',
-            
-            # Navigation/browser UI
-            'back', 'forward', 'home', 'refresh', 'reload', 'bookmark',
-            'address bar', 'search', 'tab', 'new tab', 'close tab',
-            
-            # Common buttons
-            'ok', 'cancel', 'apply', 'submit', 'save', 'delete', 'edit',
-            'yes', 'no', 'accept', 'decline', 'agree', 'disagree',
-            
-            # Status indicators
-            'online', 'offline', 'connected', 'disconnected', 'loading',
-            'error', 'warning', 'success', 'failed', 'complete',
-            
-            # Time/date formats (often UI elements)
-            'am', 'pm', 'today', 'yesterday', 'tomorrow',
-            
-            # Single character UI elements
-            'x', '+', '-', '×', '÷', '=', '<', '>', '|', '\\', '/',
-            
-            # Very short UI text
-            'on', 'off', 'go', 'up', 'down', 'in', 'out'
-        ]
-        
-        # Check for exact matches with common UI text
-        if text_lower in ui_patterns:
-            return True
-        
-        # Check for very short text (likely UI elements)
-        if len(text_lower) <= 2 and text_lower.isalpha():
-            return True
-        
-        # Check for time patterns (HH:MM, HH:MM:SS)
-        import re
-        time_pattern = r'^\d{1,2}:\d{2}(:\d{2})?(\s*(am|pm))?$'
-        if re.match(time_pattern, text_lower):
-            return True
-        
-        # Check for percentage values (often UI indicators)
-        if re.match(r'^\d+%$', text_lower):
-            return True
-        
-        # Check for typical UI positioning (edges and corners)
-        if self._is_text_in_ui_zone(region):
-            # If text is in a typical UI zone and matches common patterns
-            ui_zone_patterns = [
-                'close', 'x', 'menu', '≡', '☰', 'settings', '⚙', 'gear',
-                'minimize', 'maximize', 'restore', 'fullscreen', '⛶',
-                'back', '←', '→', 'forward', 'home', '🏠', 'refresh', '↻'
-            ]
-            if any(pattern in text_lower for pattern in ui_zone_patterns):
-                return True
-        
-        return False
-    
-    def _is_text_in_ui_zone(self, region: Dict) -> bool:
-        """
-        Check if text is positioned in typical UI zones (edges, corners)
-        
-        Args:
-            region (Dict): Text region with position information
-            
-        Returns:
-            bool: True if text is in a typical UI zone
-        """
-        if not self.image_dimensions:
-            return False
-        
-        height, width = self.image_dimensions[:2]
-        
-        # Define UI zones as percentages of image dimensions
-        edge_threshold = 0.1  # 10% from edges
-        corner_threshold = 0.15  # 15% from corners
-        
-        center_x = region['center_x']
-        center_y = region['center_y']
-        
-        # Check if text is near edges
-        near_left = center_x < (width * edge_threshold)
-        near_right = center_x > (width * (1 - edge_threshold))
-        near_top = center_y < (height * edge_threshold)
-        near_bottom = center_y > (height * (1 - edge_threshold))
-        
-        # Check if text is in corners
-        in_corner = ((near_left or near_right) and (near_top or near_bottom))
-        
-        # Check if text is along edges
-        on_edge = near_left or near_right or near_top or near_bottom
-        
-        return in_corner or on_edge
-    
-    def _filter_ui_elements(self, text_regions: List[Dict]) -> List[Dict]:
-        """
-        Filter out text regions that appear to be UI elements
-        
-        Args:
-            text_regions (List[Dict]): List of detected text regions
-            
-        Returns:
-            List[Dict]: Filtered list with UI elements removed
-        """
-        if not self.exclude_ui_elements:
-            return text_regions
-        
-        filtered_regions = []
-        excluded_count = 0
-        
-        for region in text_regions:
-            if not self._is_text_ui_element(region['text'], region):
-                filtered_regions.append(region)
-            else:
-                excluded_count += 1
-        
-        if excluded_count > 0:
-            print(f"Filtered out {excluded_count} UI element(s) from text reading")
-        
-        return filtered_regions
-        
     def _clean_and_format_text(self, text: str) -> str:
         """
         Clean and format text in SeeingAI style - short and concise
@@ -425,7 +281,7 @@ class SeeingAIShortTextProcessor(BaseProcessor):
 
     def process_frame(self, frame: np.ndarray) -> Tuple[Optional[np.ndarray], Union[str, Dict]]:
         """
-        Process frame to extract short text in SeeingAI style with out-of-view detection and UI filtering
+        Process frame to extract short text in SeeingAI style with out-of-view detection
         
         Args:
             frame (numpy.ndarray): Input frame to process
@@ -433,7 +289,7 @@ class SeeingAIShortTextProcessor(BaseProcessor):
         Returns:
             tuple: (None, result_dict_or_string)
                 - None: No visual output (text-only processor like SeeingAI)
-                - result: Either extracted text string or dict with text and filtering info
+                - result: Either extracted text string or dict with text and out-of-view info
         """
         try:
             # Store image dimensions for position tracking
@@ -443,52 +299,36 @@ class SeeingAIShortTextProcessor(BaseProcessor):
             processed_image = self._preprocess_image(frame)
             
             # Extract text with position information
-            extracted_text, all_text_regions = self._extract_text_with_easyocr(processed_image)
-            
-            # Filter out UI elements
-            content_text_regions = self._filter_ui_elements(all_text_regions)
-            
-            # Extract text from filtered regions
-            content_texts = [region['text'] for region in content_text_regions]
-            content_text = ' '.join(content_texts)
+            extracted_text, current_text_regions = self._extract_text_with_easyocr(processed_image)
             
             # Clean and format text
-            final_text = self._clean_and_format_text(content_text)
+            final_text = self._clean_and_format_text(extracted_text)
             
             # Check for text that went out of view (if tracking is enabled)
-            result = final_text if final_text else "No content text detected"
+            result = final_text if final_text else "No text detected"
             
-            if self.track_text_positions or self.exclude_ui_elements:
-                out_of_view_texts = self._is_text_out_of_view(content_text_regions) if self.track_text_positions else []
+            if self.track_text_positions:
+                out_of_view_texts = self._is_text_out_of_view(current_text_regions)
                 
-                # Create enhanced result with filtering information
+                # Create enhanced result with out-of-view information
                 result_dict = {
                     "text": result,
-                    "content_text": final_text if final_text else "No content text detected",
-                    "total_regions_detected": len(all_text_regions),
-                    "content_regions": len(content_text_regions),
-                    "ui_elements_filtered": len(all_text_regions) - len(content_text_regions),
                     "out_of_view_texts": out_of_view_texts,
-                    "tracking_enabled": self.track_text_positions,
-                    "ui_filtering_enabled": self.exclude_ui_elements
+                    "total_regions": len(current_text_regions),
+                    "tracking_enabled": True
                 }
                 
                 # Add warning if text went out of view
                 if out_of_view_texts:
-                    result_dict["warning"] = f"Content text went out of view: {', '.join(out_of_view_texts[:2])}" + ("..." if len(out_of_view_texts) > 2 else "")
-                
-                # Add info about UI filtering
-                if self.exclude_ui_elements and len(all_text_regions) > len(content_text_regions):
-                    ui_filtered_count = len(all_text_regions) - len(content_text_regions)
-                    result_dict["info"] = f"Filtered out {ui_filtered_count} UI element(s), focusing on content"
+                    result_dict["warning"] = f"Text went out of view: {', '.join(out_of_view_texts[:2])}" + ("..." if len(out_of_view_texts) > 2 else "")
                 
                 # Update previous regions for next frame
-                self.previous_text_regions = content_text_regions.copy()
+                self.previous_text_regions = current_text_regions.copy()
                 
                 return None, result_dict
             else:
                 # Update previous regions for next frame (even if not actively tracking)
-                self.previous_text_regions = content_text_regions.copy()
+                self.previous_text_regions = current_text_regions.copy()
                 return None, result
                 
         except Exception as e:
@@ -497,7 +337,7 @@ class SeeingAIShortTextProcessor(BaseProcessor):
 
     def process_frame_with_bounds(self, frame: np.ndarray, viewing_bounds: Dict) -> Tuple[Optional[np.ndarray], Union[str, Dict]]:
         """
-        Process frame with viewing bounds for out-of-view detection and UI filtering
+        Process frame with viewing bounds for out-of-view detection
         
         Args:
             frame (numpy.ndarray): Input frame to process
@@ -514,93 +354,49 @@ class SeeingAIShortTextProcessor(BaseProcessor):
             processed_image = self._preprocess_image(frame)
             
             # Extract text with position information
-            extracted_text, all_text_regions = self._extract_text_with_easyocr(processed_image)
+            extracted_text, current_text_regions = self._extract_text_with_easyocr(processed_image)
             
-            # Filter out UI elements
-            content_text_regions = self._filter_ui_elements(all_text_regions)
+            # Clean and format text
+            final_text = self._clean_and_format_text(extracted_text)
             
             # Check for text that went out of view using provided bounds
-            out_of_view_texts = self._is_text_out_of_view(content_text_regions, viewing_bounds)
+            out_of_view_texts = self._is_text_out_of_view(current_text_regions, viewing_bounds)
             
-            # Filter current text to only include what's in view (from content, not UI)
-            pixel_bounds = self._convert_bounds_to_pixels(viewing_bounds)
+            # Filter current text to only include what's in view
             in_view_texts = []
-            for region in content_text_regions:
-                if self._is_region_in_bounds(region, pixel_bounds):
+            for region in current_text_regions:
+                if self._is_region_in_bounds(region, self._convert_bounds_to_pixels(viewing_bounds)):
                     in_view_texts.append(region['text'])
             
-            # Get all content text and visible content text
-            all_content_texts = [region['text'] for region in content_text_regions]
-            all_content_text = ' '.join(all_content_texts)
             in_view_text = ' '.join(in_view_texts)
-            
             formatted_in_view_text = self._clean_and_format_text(in_view_text)
-            formatted_all_content_text = self._clean_and_format_text(all_content_text)
             
             # Create enhanced result
             result_dict = {
-                "text": formatted_in_view_text if formatted_in_view_text else "No content text in view",
-                "content_text": formatted_all_content_text if formatted_all_content_text else "No content text detected",
+                "text": formatted_in_view_text if formatted_in_view_text else "No text in view",
+                "full_text": final_text if final_text else "No text detected",
                 "out_of_view_texts": out_of_view_texts,
                 "in_view_regions": len(in_view_texts),
-                "content_regions": len(content_text_regions),
-                "total_regions_detected": len(all_text_regions),
-                "ui_elements_filtered": len(all_text_regions) - len(content_text_regions),
+                "total_regions": len(current_text_regions),
                 "tracking_enabled": True,
-                "ui_filtering_enabled": self.exclude_ui_elements,
                 "viewing_bounds": viewing_bounds
             }
             
-            # Add warnings and info
+            # Add warnings
             if out_of_view_texts:
-                result_dict["warning"] = f"Content text moved out of view: {', '.join(out_of_view_texts[:2])}" + ("..." if len(out_of_view_texts) > 2 else "")
+                result_dict["warning"] = f"Text moved out of view: {', '.join(out_of_view_texts[:2])}" + ("..." if len(out_of_view_texts) > 2 else "")
             
-            if not in_view_texts and content_text_regions:
-                result_dict["info"] = "Content text detected but outside viewing area"
-            
-            if self.exclude_ui_elements and len(all_text_regions) > len(content_text_regions):
-                ui_filtered_count = len(all_text_regions) - len(content_text_regions)
-                current_info = result_dict.get("info", "")
-                ui_info = f"Filtered out {ui_filtered_count} UI element(s), focusing on content"
-                result_dict["info"] = f"{current_info}. {ui_info}" if current_info else ui_info
+            if not in_view_texts and current_text_regions:
+                result_dict["info"] = "Text detected but outside viewing area"
             
             # Update previous regions for next frame
-            self.previous_text_regions = content_text_regions.copy()
+            self.previous_text_regions = current_text_regions.copy()
             
             return None, result_dict
                 
         except Exception as e:
             print(f"Error processing frame with bounds: {e}")
             return None, f"Error: {str(e)}"
-    
-    def process_frame_with_options(self, frame: np.ndarray, options: Dict) -> Tuple[Optional[np.ndarray], Union[str, Dict]]:
-        """
-        Process frame with various options including viewing bounds and UI filtering
-        
-        Args:
-            frame (numpy.ndarray): Input frame to process
-            options (Dict): Processing options that may include viewing_bounds, exclude_ui_elements
-            
-        Returns:
-            tuple: (None, result_dict_or_string)
-        """
-        # Temporarily override UI filtering setting if specified in options
-        original_ui_filtering = self.exclude_ui_elements
-        if 'exclude_ui_elements' in options:
-            self.exclude_ui_elements = options['exclude_ui_elements']
-        
-        try:
-            if 'viewing_bounds' in options:
-                # Use bounds-aware processing
-                result = self.process_frame_with_bounds(frame, options['viewing_bounds'])
-            else:
-                # Use regular processing
-                result = self.process_frame(frame)
-            
-            return result
-        finally:
-            # Restore original UI filtering setting
-            self.exclude_ui_elements = original_ui_filtering
     
     def _convert_bounds_to_pixels(self, viewing_bounds: Dict) -> Dict:
         """
