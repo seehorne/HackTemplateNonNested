@@ -1504,7 +1504,14 @@
                     }
                 }
                 if (!wasHandledAsPointCloud) {
-                    const textForDisplay = (typeof data.text === 'string') ? data.text : "";
+                    // Handle different text formats
+                    let textForDisplay = "";
+                    if (typeof data.text === 'string') {
+                        textForDisplay = data.text;
+                    } else if (typeof data.text === 'object' && data.text !== null) {
+                        // Extract text from dict response (e.g., from SeeingAI processor with out-of-view detection)
+                        textForDisplay = data.text.text || data.text.full_text || JSON.stringify(data.text);
+                    }
                     if (responseText) { responseText.textContent = textForDisplay; }
                     if (textForDisplay.trim() !== "" && !isMuted) { speakWithPanning(textForDisplay, -1); }
                 }
