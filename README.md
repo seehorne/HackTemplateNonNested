@@ -112,10 +112,15 @@ The SeeingAI processor (ID: 12) requires EasyOCR which downloads models on first
 - **First startup may be slow**: EasyOCR downloads models automatically (this is normal)
 - **Connection timeout**: If the processor takes too long to start, wait a few minutes and try again
 - **Missing dependency**: If you see import errors, rebuild the Docker container to install EasyOCR
-- **Out-of-view detection**: ⭐ New feature automatically detects when text moves outside the cropped viewing area
+- **Out-of-view detection**: ⭐ Automatically detects when text moves outside the cropped viewing area
   - Use cropping controls to focus on specific screen areas
   - The processor will warn when text goes out of view
   - Helps prevent reading text that's no longer visible to the user
+- **Speech rate control**: ⭐ Adjustable text-to-speech reading speed
+  - Use the Speech Rate slider or Alt+V keyboard shortcut
+  - Range from 0.5x (slow) to 2.0x (fast)
+  - Default is 1.0x (normal speed) for comfortable listening
+  - Automatically speeds up when text queue builds up
 
 ### Deployment to RunPod
 
