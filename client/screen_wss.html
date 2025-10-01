@@ -401,10 +401,6 @@
                     <input type="checkbox" id="soundSplittingCheckbox" checked>
                     <label for="soundSplittingCheckbox">Enable Sound Splitting (TTS: Left, Audio Playback: Right)</label>
                 </div>
-                <div class="checkbox-container">
-                    <input type="checkbox" id="uiFilteringCheckbox" checked>
-                    <label for="uiFilteringCheckbox">⭐ Filter UI Elements (SeeingAI processor)</label>
-                </div>
             </div>
         </section>
 
@@ -454,7 +450,6 @@
         const statusBar = document.getElementById('statusBar');
         const fetchProcessorsButton = document.getElementById('fetchProcessorsButton');
         const soundSplittingCheckbox = document.getElementById('soundSplittingCheckbox');
-        const uiFilteringCheckbox = document.getElementById('uiFilteringCheckbox');
         
         // Cropping controls
         const leftCrop = document.getElementById('leftCrop');
@@ -477,7 +472,6 @@
         let currentStreamType = 'video';
         let isWaitingForResponse = false;
         let soundSplittingEnabled = true;
-        let uiFilteringEnabled = true;  // New variable for UI filtering
 
         let utteranceQueue = [];
         const MAX_UTTERANCE_QUEUE_SIZE = 2;
@@ -988,7 +982,6 @@
         fetchProcessorsButton.addEventListener('click', fetchProcessors);
         refreshAudioButton.addEventListener('click', enumerateAudioDevices);
         soundSplittingCheckbox.addEventListener('change', (e) => { soundSplittingEnabled = e.target.checked; updateStatus(`Sound splitting ${soundSplittingEnabled ? 'enabled' : 'disabled'}`); });
-        uiFilteringCheckbox.addEventListener('change', (e) => { uiFilteringEnabled = e.target.checked; updateStatus(`UI filtering ${uiFilteringEnabled ? 'enabled' : 'disabled'}`); });
         selectScreenButton.addEventListener('click', async () => {
             const success = await setupScreenCapture(); // screenStatus and button state are handled within setupScreenCapture
             if (!success) {
@@ -1408,7 +1401,7 @@
                 
                 const dataUrl = tempCanvas.toDataURL('image/jpeg', 100 / 100);
                 if (websocket && websocket.readyState === WebSocket.OPEN) {
-                    // Include cropping bounds and UI filtering preference for processors that support it
+                    // Include cropping bounds for processors that support out-of-view detection
                     const message = { 
                         image: dataUrl, 
                         processor: parseInt(currentProcessor),
@@ -1417,8 +1410,7 @@
                             right: cropSettings[1], 
                             top: cropSettings[2],
                             bottom: cropSettings[3]
-                        },
-                        exclude_ui_elements: uiFilteringEnabled
+                        }
                     };
                     websocket.send(JSON.stringify(message));
                 }
