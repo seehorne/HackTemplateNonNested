@@ -165,6 +165,10 @@ The system supports real-time audio streaming for voice-based interactions:
    - Install VB-Audio Virtual Cable from https://vb-audio.com/Cable/
    - Set VB-Audio Virtual Cable Output as default system audio output
    - In WhatsApp calls, set audio input to VB-Audio Virtual Cable Input
+4. **Adjustable Speech Rate**: Control text-to-speech reading speed with the Speech Rate slider (Alt+V)
+   - Range: 0.5x (slow) to 2.0x (fast)
+   - Default: 1.0x (normal speed)
+   - Perfect for users who need slower or faster reading speeds
 
 ## API Endpoints
 
