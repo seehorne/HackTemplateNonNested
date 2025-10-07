@@ -60,6 +60,19 @@ The system includes several processors, ordered by complexity:
     - Queue and current speech checking to avoid duplicates
 - **Note**: First-time startup may take longer as EasyOCR downloads models automatically
 
+### Camera Aiming Processor (ID: 13)
+- **Description**: Provides camera aiming guidance for document capture, similar to Microsoft Seeing AI's document mode
+- **Dependencies**: None (CPU-only OpenCV operations)
+- **Use Case**: Helps users properly frame documents by providing directional audio feedback
+- **Features**:
+  - 📷 **Document Detection** - Automatically detects document edges in the camera view
+  - 🎯 **Directional Guidance** - Provides clear audio instructions: "move left", "move right", "move up", "move down", "move closer", "move back"
+  - ✅ **Framing Feedback** - Indicates when document is perfectly framed and ready to capture
+  - 📊 **Coverage Metrics** - Shows document coverage percentage and alignment status
+  - 🖼️ **Visual Overlay** - Displays target zone, center crosshair, and detected document boundaries
+- **Technical**: Uses CPU-only Canny edge detection and contour analysis for real-time performance without GPU
+- **Note**: Works best with documents that have clear edges and good contrast against the background
+
 ## Setting Up Your Own Server
 
 ### Local Server Setup
