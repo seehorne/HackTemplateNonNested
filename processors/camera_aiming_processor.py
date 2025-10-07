@@ -56,8 +56,11 @@ class CameraAimingProcessor(BaseProcessor):
         # Convert to grayscale
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
-        # Apply Gaussian blur to reduce noise
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        # Apply bilateral filter to reduce noise while preserving edges
+        filtered = cv2.bilateralFilter(gray, 9, 75, 75)
+        
+        # Apply Gaussian blur to further reduce noise
+        blurred = cv2.GaussianBlur(filtered, (5, 5), 0)
         
         return blurred
     
@@ -74,15 +77,18 @@ class CameraAimingProcessor(BaseProcessor):
         # Preprocess
         gray = self._preprocess_image(frame)
         
-        # Edge detection
+        # Edge detection with adaptive thresholds
         edges = cv2.Canny(gray, self.edge_threshold_low, self.edge_threshold_high)
         
         # Dilate edges to close gaps
         kernel = np.ones((5, 5), np.uint8)
-        dilated = cv2.dilate(edges, kernel, iterations=1)
+        dilated = cv2.dilate(edges, kernel, iterations=2)
+        
+        # Also try closing to connect nearby edges
+        closed = cv2.morphologyEx(dilated, cv2.MORPH_CLOSE, kernel, iterations=1)
         
         # Find contours
-        contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         if not contours:
             return None
@@ -93,7 +99,7 @@ class CameraAimingProcessor(BaseProcessor):
         frame_area = frame.shape[0] * frame.shape[1]
         
         # Look for rectangular contours with more lenient thresholds
-        for contour in contours[:10]:  # Check top 10 largest contours
+        for contour in contours[:15]:  # Check top 15 largest contours
             # Calculate contour area
             area = cv2.contourArea(contour)
             
@@ -101,18 +107,28 @@ class CameraAimingProcessor(BaseProcessor):
             if area < frame_area * 0.05:  # At least 5% of frame
                 continue
             
-            # Approximate the contour to a polygon
-            peri = cv2.arcLength(contour, True)
-            approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
-            
-            # Check if it has a rectangular-ish aspect ratio
+            # Get bounding rectangle
             x, y, w, h = cv2.boundingRect(contour)
+            
+            # Calculate aspect ratio
             aspect_ratio = float(w) / h if h > 0 else 0
             
-            # Document-like aspect ratios (between 0.5 and 2.0)
-            if 0.5 <= aspect_ratio <= 2.0:
-                # Either has 4 corners or significant area
-                if len(approx) >= 4 or area > frame_area * 0.1:
+            # Document-like aspect ratios (between 0.5 and 2.5 to allow for perspective)
+            if not (0.5 <= aspect_ratio <= 2.5):
+                continue
+            
+            # Approximate the contour to a polygon
+            peri = cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, 0.04 * peri, True)
+            
+            # Check rectangularity - either 4 corners or contour fills bounding box well
+            rect_area = w * h
+            extent = float(area) / rect_area if rect_area > 0 else 0
+            
+            # If it's reasonably rectangular (fills >50% of bounding box) or has 4 corners
+            if len(approx) >= 4 or extent > 0.5:
+                # Additional check: not too irregular
+                if extent > 0.3:  # At least 30% filled
                     return contour
         
         return None
