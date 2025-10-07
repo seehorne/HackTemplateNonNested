@@ -128,5 +128,15 @@
     "expects_input": "image",
     "description": "Extracts short text from images similar to SeeingAI, using CPU-only OCR.",
     "enabled": true
+  },
+  "13": {
+    "host": "127.0.0.1",
+    "port": 8014,
+    "name": "camera_aiming_processor",
+    "conda_env": "whatsai",
+    "dependencies": [],
+    "expects_input": "image",
+    "description": "Provides camera aiming guidance for document capture, similar to Seeing AI document mode. CPU-only.",
+    "enabled": true
   }
 }
