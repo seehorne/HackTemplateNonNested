@@ -343,6 +343,15 @@
                 <p id="processorSelectDesc" class="hidden">Select the processing mode for the video feed</p>
             </div>
             
+            <div class="setting-row" id="languageSelectionRow" style="display: none;">
+                <label for="ocrLanguageSelect" class="setting-label">OCR Language (Recognize In):</label>
+                <select id="ocrLanguageSelect" aria-describedby="ocrLanguageSelectDesc">
+                    <option value="en" selected>English</option>
+                </select>
+                <button id="applyLanguageButton" class="fetch-processors" aria-label="Apply language selection">Apply</button>
+                <p id="ocrLanguageSelectDesc" class="hidden">Select the language for text recognition</p>
+            </div>
+            
             <div class="setting-row">
                 <label for="audioInputSelect" class="setting-label"> Audio Input (Alt+I):</label>
                 <select id="audioInputSelect" aria-describedby="audioInputSelectDesc">
@@ -459,6 +468,9 @@
         const statusBar = document.getElementById('statusBar');
         const fetchProcessorsButton = document.getElementById('fetchProcessorsButton');
         const soundSplittingCheckbox = document.getElementById('soundSplittingCheckbox');
+        const languageSelectionRow = document.getElementById('languageSelectionRow');
+        const ocrLanguageSelect = document.getElementById('ocrLanguageSelect');
+        const applyLanguageButton = document.getElementById('applyLanguageButton');
         
         // Cropping controls
         const leftCrop = document.getElementById('leftCrop');
@@ -1051,6 +1063,79 @@
             }
         }
         
+        async function fetchSupportedLanguages() {
+            try {
+                // Get the processor config to find the SeeingAI processor port
+                const apiUrl = convertWsToHttp(serverUrl.value);
+                const processorConfig = await fetch(apiUrl).then(r => r.json());
+                const seeingAIProcessor = processorConfig.processors.find(p => p.name === 'seeing_ai_short_text_processor');
+                
+                if (!seeingAIProcessor) {
+                    console.log('SeeingAI processor not found');
+                    return;
+                }
+                
+                const langApiUrl = `http://${seeingAIProcessor.host}:${seeingAIProcessor.port}/supported_languages`;
+                const response = await fetch(langApiUrl);
+                if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
+                const data = await response.json();
+                
+                ocrLanguageSelect.innerHTML = '';
+                data.languages.forEach(lang => {
+                    const option = document.createElement('option');
+                    option.value = lang.code;
+                    option.textContent = lang.name;
+                    if (lang.code === 'en') { option.selected = true; }
+                    ocrLanguageSelect.appendChild(option);
+                });
+                
+                console.log('Supported languages loaded successfully');
+            } catch (error) {
+                console.error('Error fetching supported languages:', error);
+                ocrLanguageSelect.innerHTML = '<option value="en" selected>English</option>';
+            }
+        }
+        
+        async function applyLanguageSelection() {
+            try {
+                const selectedLanguage = ocrLanguageSelect.value;
+                
+                // Get the processor config to find the SeeingAI processor port
+                const apiUrl = convertWsToHttp(serverUrl.value);
+                const processorConfig = await fetch(apiUrl).then(r => r.json());
+                const seeingAIProcessor = processorConfig.processors.find(p => p.name === 'seeing_ai_short_text_processor');
+                
+                if (!seeingAIProcessor) {
+                    updateStatus('SeeingAI processor not found', true);
+                    return;
+                }
+                
+                updateStatus(`Switching to ${ocrLanguageSelect.options[ocrLanguageSelect.selectedIndex].text}...`);
+                
+                const langApiUrl = `http://${seeingAIProcessor.host}:${seeingAIProcessor.port}/set_languages`;
+                const response = await fetch(langApiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ languages: [selectedLanguage] })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to change language');
+                }
+                
+                const result = await response.json();
+                
+                // Show confirmation dialog similar to SeeingAI
+                if (confirm(`Successfully switched to ${ocrLanguageSelect.options[ocrLanguageSelect.selectedIndex].text}. The OCR will now recognize text in this language.`)) {
+                    updateStatus(`Language changed to ${ocrLanguageSelect.options[ocrLanguageSelect.selectedIndex].text}`);
+                }
+            } catch (error) {
+                console.error('Error applying language selection:', error);
+                updateStatus(`Failed to change language: ${error.message}`, true);
+            }
+        }
+        
         toggleStreamingButton.addEventListener('click', toggleStreaming);
         toggleMuteButton.addEventListener('click', toggleMute);
         toggleAudioButton.addEventListener('click', toggleAudioStreaming);
@@ -1078,7 +1163,20 @@
             speechRateSlider.setAttribute('aria-valuetext', `Speech rate: ${rateDisplay} ${userSpeechRate < 1 ? 'slower' : userSpeechRate > 1 ? 'faster' : 'normal speed'}`); 
             updateStatus(`Speech rate set to ${rateDisplay}`);
         });
-        processorSelect.addEventListener('change', () => { currentProcessor = parseInt(processorSelect.value); updateStatus(`Selected processor: ${processorSelect.options[processorSelect.selectedIndex].text}`); });
+        processorSelect.addEventListener('change', async () => { 
+            currentProcessor = parseInt(processorSelect.value); 
+            const processorName = processorSelect.options[processorSelect.selectedIndex].text;
+            updateStatus(`Selected processor: ${processorName}`); 
+            
+            // Show language selection only for SeeingAI Short Text Processor (ID: 12)
+            if (currentProcessor === 12) {
+                languageSelectionRow.style.display = 'flex';
+                await fetchSupportedLanguages();
+            } else {
+                languageSelectionRow.style.display = 'none';
+            }
+        });
+        applyLanguageButton.addEventListener('click', applyLanguageSelection);
         audioInputSelect.addEventListener('change', () => { selectedAudioDeviceId = audioInputSelect.value || null; updateStatus(`Selected audio input: ${audioInputSelect.options[audioInputSelect.selectedIndex].text}`); if (isAudioStreaming) { restartAudioStreaming(); } });
         // MODIFIED: Update crop value display functions to show percentages AND trigger preview update
         leftCrop.addEventListener('input', () => {
