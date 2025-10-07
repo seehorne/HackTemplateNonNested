@@ -1091,6 +1091,9 @@
             }
         }
         
+        // Store processor info for language changes
+        let seeingAIProcessorInfo = null;
+        
         async function fetchSupportedLanguages() {
             try {
                 // Get the processor config to find the SeeingAI processor port
@@ -1100,8 +1103,12 @@
                 
                 if (!seeingAIProcessor) {
                     console.log('SeeingAI processor not found - using hardcoded language list');
+                    seeingAIProcessorInfo = null;
                     return;
                 }
+                
+                // Store processor info for later use
+                seeingAIProcessorInfo = seeingAIProcessor;
                 
                 const langApiUrl = `http://${seeingAIProcessor.host}:${seeingAIProcessor.port}/supported_languages`;
                 const response = await fetch(langApiUrl);
@@ -1123,6 +1130,7 @@
             } catch (error) {
                 console.error('Error fetching supported languages from backend:', error);
                 console.log('Using hardcoded language list');
+                seeingAIProcessorInfo = null;
                 // Keep the hardcoded languages that are already in the dropdown
             }
         }
@@ -1131,19 +1139,21 @@
             try {
                 const selectedLanguage = ocrLanguageSelect.value;
                 
-                // Get the processor config to find the SeeingAI processor port
-                const apiUrl = convertWsToHttp(serverUrl.value);
-                const processorConfig = await fetch(apiUrl).then(r => r.json());
-                const seeingAIProcessor = processorConfig.processors.find(p => p.name === 'seeing_ai_short_text_processor');
+                // If we don't have processor info, try to fetch it
+                if (!seeingAIProcessorInfo) {
+                    updateStatus('Connecting to processor...', false);
+                    const apiUrl = convertWsToHttp(serverUrl.value);
+                    const processorConfig = await fetch(apiUrl).then(r => r.json());
+                    seeingAIProcessorInfo = processorConfig.processors.find(p => p.name === 'seeing_ai_short_text_processor');
+                }
                 
-                if (!seeingAIProcessor) {
-                    updateStatus('SeeingAI processor not found', true);
-                    return;
+                if (!seeingAIProcessorInfo) {
+                    throw new Error('SeeingAI processor not available. Please ensure the server is running and the processor is enabled.');
                 }
                 
                 updateStatus(`Switching to ${ocrLanguageSelect.options[ocrLanguageSelect.selectedIndex].text}...`);
                 
-                const langApiUrl = `http://${seeingAIProcessor.host}:${seeingAIProcessor.port}/set_languages`;
+                const langApiUrl = `http://${seeingAIProcessorInfo.host}:${seeingAIProcessorInfo.port}/set_languages`;
                 const response = await fetch(langApiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
