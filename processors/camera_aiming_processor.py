@@ -223,11 +223,14 @@ class CameraAimingProcessor(BaseProcessor):
             else:
                 return "Good alignment. Move slightly back."
         
-        # Combine guidance parts
-        if len(guidance_parts) == 1:
-            return guidance_parts[0].capitalize() + "."
-        else:
-            return guidance_parts[0].capitalize() + ", " + ", ".join(guidance_parts[1:]) + "."
+        # Combine guidance parts with coverage hint for context
+        coverage_pct = int(coverage * 100)
+        guidance_str = guidance_parts[0].capitalize()
+        if len(guidance_parts) > 1:
+            guidance_str += ", " + ", ".join(guidance_parts[1:])
+        guidance_str += f". (Coverage: {coverage_pct}%)"
+        
+        return guidance_str
     
     def _draw_guidance_overlay(self, frame: np.ndarray, contour: Optional[np.ndarray], metrics: Optional[Dict], guidance: str) -> np.ndarray:
         """
@@ -314,15 +317,19 @@ class CameraAimingProcessor(BaseProcessor):
             if contour is not None:
                 metrics = self._calculate_document_metrics(contour, frame.shape)
                 guidance = self._generate_aiming_guidance(metrics)
+                
+                # Add helpful context: show if document is detected and basic framing status
+                result = f"{guidance}"
             else:
                 guidance = "No document detected. Please point your camera at a document."
+                result = guidance
                 metrics = None
             
             # Draw overlay
             output_frame = self._draw_guidance_overlay(frame, contour, metrics, guidance)
             
-            # Return just the guidance message - simple and focused
-            return output_frame, guidance
+            # Return guidance with minimal but helpful context
+            return output_frame, result
             
         except Exception as e:
             import traceback
