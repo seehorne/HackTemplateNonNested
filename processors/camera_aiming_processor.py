@@ -38,7 +38,8 @@ class CameraAimingProcessor(BaseProcessor):
         self.edge_threshold_high = edge_threshold_high
         
         # Tolerance for "well-centered" detection
-        self.center_tolerance = 0.15  # 15% of frame dimensions
+        # Lowered to 10% to make directional guidance more sensitive
+        self.center_tolerance = 0.10  # 10% of frame dimensions
         
         print(f"Camera Aiming processor initialized (CPU-only)")
         print(f"Target coverage: {target_coverage*100}%, Min: {min_coverage*100}%, Max: {max_coverage*100}%")
@@ -254,16 +255,23 @@ class CameraAimingProcessor(BaseProcessor):
         doc_area = cv2.contourArea(contour)
         coverage = doc_area / frame_area
         
+        # Also calculate coverage based on bounding box (more intuitive)
+        bbox_area = w * h
+        bbox_coverage = bbox_area / frame_area
+        
         # Calculate offsets (normalized)
         offset_x = (doc_center_x - frame_center_x) / frame_width
         offset_y = (doc_center_y - frame_center_y) / frame_height
         
+        # Use bounding box coverage for guidance (more intuitive than contour area)
+        # Contour area can be irregular and confusing to users
         return {
             'center': (doc_center_x, doc_center_y),
             'frame_center': (frame_center_x, frame_center_y),
             'offset_x': offset_x,
             'offset_y': offset_y,
-            'coverage': coverage,
+            'coverage': bbox_coverage,  # Use bbox coverage (more intuitive)
+            'contour_coverage': coverage,  # Keep original for reference
             'bounds': (x, y, w, h),
             'aspect_ratio': w / h if h > 0 else 1.0
         }
