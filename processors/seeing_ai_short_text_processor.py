@@ -68,13 +68,90 @@ class SeeingAIShortTextProcessor(BaseProcessor):
         """
         if self.reader is None:
             try:
-                print("Initializing EasyOCR reader...")
+                print(f"Initializing EasyOCR reader with languages: {self.languages}...")
                 self.reader = easyocr.Reader(self.languages, gpu=self.use_gpu)
                 print("EasyOCR reader initialized successfully")
             except Exception as e:
                 print(f"Error initializing EasyOCR: {e}")
                 raise e
         return self.reader
+    
+    def set_languages(self, languages: List[str]) -> Dict[str, str]:
+        """
+        Change OCR languages (similar to SeeingAI's 'recognize in' feature)
+        Requires reinitialization of the EasyOCR reader
+        
+        Args:
+            languages (List[str]): List of language codes (e.g., ['en', 'es', 'fr'])
+            
+        Returns:
+            Dict with status and message
+        """
+        try:
+            # Validate languages is a list
+            if not isinstance(languages, list) or len(languages) == 0:
+                return {
+                    "status": "error",
+                    "message": "Languages must be a non-empty list"
+                }
+            
+            # Convert to list if single string provided
+            if isinstance(languages, str):
+                languages = [languages]
+            
+            print(f"Switching OCR languages from {self.languages} to {languages}")
+            
+            # Store old languages in case we need to rollback
+            old_languages = self.languages
+            old_reader = self.reader
+            
+            # Update languages
+            self.languages = languages
+            
+            # Force reinitialization of reader
+            self.reader = None
+            
+            try:
+                # Try to initialize with new languages
+                new_reader = self._get_reader()
+                
+                # If successful, clean up old reader if it exists
+                if old_reader is not None:
+                    del old_reader
+                
+                return {
+                    "status": "success",
+                    "message": f"Successfully switched to languages: {', '.join(languages)}",
+                    "languages": languages
+                }
+            except Exception as e:
+                # Rollback on error
+                print(f"Failed to initialize reader with new languages: {e}")
+                self.languages = old_languages
+                self.reader = old_reader
+                return {
+                    "status": "error",
+                    "message": f"Failed to switch languages: {str(e)}. Reverted to {', '.join(old_languages)}"
+                }
+                
+        except Exception as e:
+            print(f"Error in set_languages: {e}")
+            return {
+                "status": "error",
+                "message": f"Error changing languages: {str(e)}"
+            }
+    
+    def get_current_languages(self) -> Dict[str, any]:
+        """
+        Get currently configured OCR languages
+        
+        Returns:
+            Dict with current languages
+        """
+        return {
+            "languages": self.languages,
+            "reader_initialized": self.reader is not None
+        }
 
     def _preprocess_image(self, image: np.ndarray) -> np.ndarray:
         """
@@ -553,3 +630,78 @@ class SeeingAIShortTextProcessor(BaseProcessor):
 # Create processor instance
 processor = SeeingAIShortTextProcessor()
 app = processor.app
+
+# Add language configuration endpoints
+from fastapi import HTTPException
+from pydantic import BaseModel
+
+class LanguageRequest(BaseModel):
+    languages: List[str]
+
+@app.post("/set_languages")
+async def set_languages(request: LanguageRequest):
+    """
+    Change OCR languages (similar to SeeingAI's 'recognize in' feature)
+    """
+    try:
+        result = processor.set_languages(request.languages)
+        if result["status"] == "error":
+            raise HTTPException(status_code=400, detail=result["message"])
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/get_languages")
+async def get_languages():
+    """
+    Get currently configured OCR languages
+    """
+    try:
+        return processor.get_current_languages()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/supported_languages")
+async def get_supported_languages():
+    """
+    Get list of supported languages by EasyOCR
+    """
+    try:
+        # Common languages supported by EasyOCR
+        # Full list: https://www.jaided.ai/easyocr/
+        supported = {
+            "languages": [
+                {"code": "en", "name": "English"},
+                {"code": "ch_sim", "name": "Chinese (Simplified)"},
+                {"code": "ch_tra", "name": "Chinese (Traditional)"},
+                {"code": "ja", "name": "Japanese"},
+                {"code": "ko", "name": "Korean"},
+                {"code": "ar", "name": "Arabic"},
+                {"code": "bn", "name": "Bengali"},
+                {"code": "cs", "name": "Czech"},
+                {"code": "da", "name": "Danish"},
+                {"code": "nl", "name": "Dutch"},
+                {"code": "fi", "name": "Finnish"},
+                {"code": "fr", "name": "French"},
+                {"code": "de", "name": "German"},
+                {"code": "el", "name": "Greek"},
+                {"code": "hi", "name": "Hindi"},
+                {"code": "hu", "name": "Hungarian"},
+                {"code": "id", "name": "Indonesian"},
+                {"code": "it", "name": "Italian"},
+                {"code": "no", "name": "Norwegian"},
+                {"code": "pl", "name": "Polish"},
+                {"code": "pt", "name": "Portuguese"},
+                {"code": "ro", "name": "Romanian"},
+                {"code": "ru", "name": "Russian"},
+                {"code": "es", "name": "Spanish"},
+                {"code": "sv", "name": "Swedish"},
+                {"code": "th", "name": "Thai"},
+                {"code": "tr", "name": "Turkish"},
+                {"code": "vi", "name": "Vietnamese"},
+                {"code": "uk", "name": "Ukrainian"},
+            ]
+        }
+        return supported
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

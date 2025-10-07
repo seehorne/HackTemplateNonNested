@@ -58,6 +58,11 @@ The system includes several processors, ordered by complexity:
     - 10-second prevention window (won't repeat text within 10 seconds)
     - Normalized text comparison (handles minor OCR variations like extra spaces or case differences)
     - Queue and current speech checking to avoid duplicates
+  - ⭐ **Language Selection (Recognize In)** - Change OCR language similar to SeeingAI's "recognize in" feature:
+    - Select from 28+ supported languages including English, Spanish, French, German, Chinese, Japanese, Arabic, and more
+    - Dynamic language switching without restarting the processor
+    - Confirmation dialog after language change
+    - UI appears automatically when SeeingAI processor is selected
 - **Note**: First-time startup may take longer as EasyOCR downloads models automatically
 
 ## Setting Up Your Own Server
