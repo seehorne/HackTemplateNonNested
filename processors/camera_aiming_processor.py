@@ -14,9 +14,9 @@ class CameraAimingProcessor(BaseProcessor):
     """
     
     def __init__(self, 
-                 target_coverage=0.6,  # Target document coverage (60% of frame)
-                 min_coverage=0.3,     # Minimum coverage to consider a document
-                 max_coverage=0.85,    # Maximum coverage (too close)
+                 target_coverage=0.5,  # Target document coverage (50% of frame) - more realistic
+                 min_coverage=0.15,    # Minimum coverage to consider a document (15%)
+                 max_coverage=0.80,    # Maximum coverage (too close) - 80%
                  edge_threshold_low=50,
                  edge_threshold_high=150):
         """
@@ -38,8 +38,8 @@ class CameraAimingProcessor(BaseProcessor):
         self.edge_threshold_high = edge_threshold_high
         
         # Tolerance for "well-centered" detection
-        # Lowered to 10% to make directional guidance more sensitive
-        self.center_tolerance = 0.10  # 10% of frame dimensions
+        # 15% tolerance - not too sensitive, not too lenient
+        self.center_tolerance = 0.15  # 15% of frame dimensions
         
         print(f"Camera Aiming processor initialized (CPU-only)")
         print(f"Target coverage: {target_coverage*100}%, Min: {min_coverage*100}%, Max: {max_coverage*100}%")
@@ -172,9 +172,10 @@ class CameraAimingProcessor(BaseProcessor):
             # Calculate extent
             extent = area / rect_area if rect_area > 0 else 0
             
-            # Documents should fill their bounding box very well (stricter than before)
+            # Documents should fill their bounding box reasonably well
+            # Lowered from 0.70 to 0.55 to catch partially visible or off-center documents
             # Textured surfaces often have irregular contours with low extent
-            if extent < 0.70:
+            if extent < 0.55:
                 continue
             
             # Score based PRIMARILY on rectangularity
@@ -214,15 +215,16 @@ class CameraAimingProcessor(BaseProcessor):
             if len(masked_region) > 0:
                 intensity_std = np.std(masked_region)
                 
-                # Documents have low texture (std < 30), carpets/floors have high texture
-                if intensity_std > 40:
+                # Documents have low texture (std < 35), carpets/floors have high texture
+                # Slightly more lenient to accommodate printed documents
+                if intensity_std > 45:
                     # Very textured - probably not a document
                     continue
-                elif intensity_std < 20:
+                elif intensity_std < 25:
                     # Low texture - likely a document
                     score += 2
-                elif intensity_std < 30:
-                    # Medium texture - could be document
+                elif intensity_std < 35:
+                    # Medium texture - could be document with printing
                     score += 1
             
             # Brightness bonus (minor)
@@ -233,19 +235,19 @@ class CameraAimingProcessor(BaseProcessor):
                 best_score = score
                 best_contour = contour
         
-        # Stricter threshold - require good score to avoid false positives
+        # More lenient threshold to detect off-center or partially visible documents
         # Rectangularity * 10 + texture (2) + other features = up to ~20 points
-        # Require at least 9 points (high rectangularity + some other good features)
-        if best_score >= 9.0:
+        # Require at least 7 points (reasonably rectangular + some good features)
+        if best_score >= 7.0:
             return best_contour
         
-        # Lower threshold for very high extent/rectangularity
-        if best_score >= 7.0 and best_contour is not None:
+        # Even lower threshold for large documents (even if score is lower)
+        if best_score >= 5.0 and best_contour is not None:
             area = cv2.contourArea(best_contour)
             x, y, w, h = cv2.boundingRect(best_contour)
             extent = area / (w * h) if (w * h) > 0 else 0
-            # Only accept if extent is very high (fills bounding box well)
-            if extent > 0.80 and area > frame_area * 0.05:
+            # Accept if extent is good and document is reasonably sized
+            if extent > 0.60 and area > frame_area * 0.10:
                 return best_contour
         
         return None
@@ -347,23 +349,29 @@ class CameraAimingProcessor(BaseProcessor):
         
         # PRIORITY 2: Distance/coverage guidance (secondary)
         # Only give distance guidance if directional is good or coverage is very off
-        if coverage < self.min_coverage:
-            # Very small - might be too far or wrong object
+        if coverage < self.min_coverage * 0.8:  # Less than 12% coverage
+            # Very small - need to be much closer
             distance_guidance = "move much closer"
-        elif coverage < self.target_coverage - 0.15:
+        elif coverage < self.target_coverage - 0.10:  # Less than 40% coverage
             # Below target, needs to be closer
             distance_guidance = "move closer"
-        elif coverage > self.max_coverage:
+        elif coverage < self.target_coverage - 0.05:  # Between 40-45% coverage
+            # Close to target
+            distance_guidance = "move slightly closer"
+        elif coverage > self.max_coverage:  # More than 80% coverage
             # Too close
             distance_guidance = "move back"
+        elif coverage > self.target_coverage + 0.15:  # More than 65% coverage
+            # A bit too close
+            distance_guidance = "move slightly back"
         
         # CASE 1: Perfect or near-perfect framing
         if not directional_guidance and not distance_guidance:
             if abs(coverage - self.target_coverage) < 0.10:
-                # Within 10% of target - perfect
+                # Within 10% of target (40-60% coverage) - perfect
                 return "Perfect! Document is well-framed."
             elif coverage >= self.target_coverage * 0.75:
-                # Close enough to target (within 75% = 45%+ coverage) - good
+                # Close enough to target (within 75% = 37.5%+ coverage) - good
                 return "Good framing! Document is centered."
             elif coverage >= self.min_coverage:
                 # Above minimum threshold - centered but could be closer
@@ -376,9 +384,11 @@ class CameraAimingProcessor(BaseProcessor):
         # CASE 2: Well-centered but wrong distance
         if not directional_guidance and distance_guidance:
             coverage_pct = int(coverage * 100)
-            if coverage < self.target_coverage * 0.7:
+            # Only show coverage percentage if it's notably off from target
+            if coverage < self.target_coverage * 0.6:  # Less than 30% coverage
                 return f"Well-centered! Now {distance_guidance}. (Coverage: {coverage_pct}%)"
             else:
+                # Closer to target, simpler message
                 return f"Well-centered. {distance_guidance.capitalize()}."
         
         # CASE 3: Needs directional adjustment (PRIMARY USE CASE for blind users)
@@ -388,12 +398,19 @@ class CameraAimingProcessor(BaseProcessor):
             guidance_str += " and " + directional_guidance[1]
         
         # Add distance if also needed, but directional is primary
-        if distance_guidance and coverage < self.min_coverage * 1.5:
-            guidance_str += f", then {distance_guidance}"
+        # Only add distance guidance if coverage is notably off
+        if distance_guidance:
+            if coverage < self.min_coverage * 1.3 or coverage > self.max_coverage * 0.9:
+                # Coverage is very off, add distance guidance
+                guidance_str += f", then {distance_guidance}"
         
-        # Add coverage for context (helps users track progress)
+        # Add coverage for context only if it's significantly off target
+        # This helps users track progress without cluttering the message
         coverage_pct = int(coverage * 100)
-        guidance_str += f". (Coverage: {coverage_pct}%)"
+        if coverage < self.target_coverage * 0.7:  # Less than 35%
+            guidance_str += f". (Coverage: {coverage_pct}%)"
+        else:
+            guidance_str += "."
         
         return guidance_str
     
