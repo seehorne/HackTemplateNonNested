@@ -20,7 +20,8 @@ class SeeingAIShortTextProcessor(BaseProcessor):
                  use_gpu=False,  # Default to CPU as per requirements
                  min_text_length=3,
                  max_output_length=200,
-                 track_text_positions=True):  # New parameter for tracking
+                 track_text_positions=True,  # Parameter for tracking
+                 filter_ui_elements=True):  # New parameter for UI filtering
         """
         Initialize SeeingAI Short Text processor using EasyOCR for simple OCR
         
@@ -30,6 +31,7 @@ class SeeingAIShortTextProcessor(BaseProcessor):
             min_text_length (int): Minimum text length to include in output
             max_output_length (int): Maximum output length for short text format
             track_text_positions (bool): Whether to track text positions to stop reading when out of view
+            filter_ui_elements (bool): Whether to filter out UI elements from text output
         """
         super().__init__()
         
@@ -47,6 +49,7 @@ class SeeingAIShortTextProcessor(BaseProcessor):
         self.min_text_length = min_text_length
         self.max_output_length = max_output_length
         self.track_text_positions = track_text_positions
+        self.filter_ui_elements = filter_ui_elements
         
         # Text tracking for out-of-view detection
         self.previous_text_regions = []  # Store previous frame's text regions
@@ -56,6 +59,8 @@ class SeeingAIShortTextProcessor(BaseProcessor):
         print(f"SeeingAI Short Text processor initialized (EasyOCR will be loaded on first use)")
         if track_text_positions:
             print("Text position tracking enabled - will stop reading when text goes out of view")
+        if filter_ui_elements:
+            print("UI element filtering enabled - will exclude UI text from readings")
 
     def _get_reader(self):
         """
@@ -152,6 +157,93 @@ class SeeingAIShortTextProcessor(BaseProcessor):
         except Exception as e:
             print(f"Error in EasyOCR processing: {e}")
             return "", []
+
+    def _is_ui_element(self, text: str, region: Dict, image_dimensions: Tuple[int, int]) -> bool:
+        """
+        Determine if a text region is likely part of the UI rather than actual content
+        
+        Args:
+            text (str): The detected text
+            region (Dict): Region information including bbox and position
+            image_dimensions (Tuple[int, int]): Image height and width
+            
+        Returns:
+            bool: True if this appears to be UI text, False otherwise
+        """
+        if not text or len(text) == 0:
+            return True
+        
+        # Get image dimensions
+        height, width = image_dimensions[:2]
+        
+        # Extract position info
+        bbox = region['bbox']
+        center_x = region['center_x']
+        center_y = region['center_y']
+        
+        # Calculate relative positions (0-1)
+        rel_x = center_x / width if width > 0 else 0.5
+        rel_y = center_y / height if height > 0 else 0.5
+        
+        # Common UI text patterns
+        ui_patterns = [
+            # Camera/video controls
+            r'^(record|stop|pause|play|zoom|focus|settings|menu|back|forward|home)$',
+            # Browser/app UI
+            r'^(close|minimize|maximize|refresh|reload|search)$',
+            # Status indicators  
+            r'^(online|offline|loading|buffering|connecting)$',
+            # Time/date/percentages
+            r'^\d{1,2}:\d{2}(:\d{2})?\s*(am|pm)?$',  # Time
+            r'^\d{1,3}%$',  # Percentage
+            r'^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{1,2}$',  # Date
+            # Single characters or very short text
+            r'^[a-z]$',  # Single letter
+            r'^[\d\W]$',  # Single digit or symbol
+        ]
+        
+        # Check against patterns (case insensitive)
+        text_lower = text.lower().strip()
+        for pattern in ui_patterns:
+            if re.match(pattern, text_lower, re.IGNORECASE):
+                return True
+        
+        # Check if text is in typical UI zones (edges of screen)
+        edge_threshold = 0.15  # 15% from edges is considered UI zone
+        if (rel_x < edge_threshold or rel_x > (1 - edge_threshold) or 
+            rel_y < edge_threshold or rel_y > (1 - edge_threshold)):
+            # In edge zone - more likely UI if also short
+            if len(text) < 15:
+                return True
+        
+        # Very short text (1-2 characters) anywhere is likely UI
+        if len(text) <= 2:
+            return True
+        
+        # If we got here, it's probably actual content
+        return False
+
+    def _filter_ui_text(self, text_regions: List[Dict], image_dimensions: Tuple[int, int]) -> Tuple[List[Dict], List[Dict]]:
+        """
+        Separate content text from UI elements
+        
+        Args:
+            text_regions (List[Dict]): All detected text regions
+            image_dimensions (Tuple[int, int]): Image dimensions
+            
+        Returns:
+            Tuple[List[Dict], List[Dict]]: (content_regions, ui_regions)
+        """
+        content_regions = []
+        ui_regions = []
+        
+        for region in text_regions:
+            if self._is_ui_element(region['text'], region, image_dimensions):
+                ui_regions.append(region)
+            else:
+                content_regions.append(region)
+        
+        return content_regions, ui_regions
 
     def _is_text_out_of_view(self, current_regions: List[Dict], viewing_bounds: Dict = None) -> List[str]:
         """
@@ -281,7 +373,7 @@ class SeeingAIShortTextProcessor(BaseProcessor):
 
     def process_frame(self, frame: np.ndarray) -> Tuple[Optional[np.ndarray], Union[str, Dict]]:
         """
-        Process frame to extract short text in SeeingAI style with out-of-view detection
+        Process frame to extract short text in SeeingAI style with out-of-view detection and UI filtering
         
         Args:
             frame (numpy.ndarray): Input frame to process
@@ -299,7 +391,20 @@ class SeeingAIShortTextProcessor(BaseProcessor):
             processed_image = self._preprocess_image(frame)
             
             # Extract text with position information
-            extracted_text, current_text_regions = self._extract_text_with_easyocr(processed_image)
+            extracted_text, all_text_regions = self._extract_text_with_easyocr(processed_image)
+            
+            # Apply UI filtering if enabled
+            if self.filter_ui_elements:
+                content_regions, ui_regions = self._filter_ui_text(all_text_regions, self.image_dimensions)
+                # Rebuild text from content regions only
+                content_texts = [region['text'] for region in content_regions]
+                extracted_text = ' '.join(content_texts)
+                # Use content regions for further processing
+                current_text_regions = content_regions
+                ui_filtered_count = len(ui_regions)
+            else:
+                current_text_regions = all_text_regions
+                ui_filtered_count = 0
             
             # Clean and format text
             final_text = self._clean_and_format_text(extracted_text)
@@ -310,12 +415,15 @@ class SeeingAIShortTextProcessor(BaseProcessor):
             if self.track_text_positions:
                 out_of_view_texts = self._is_text_out_of_view(current_text_regions)
                 
-                # Create enhanced result with out-of-view information
+                # Create enhanced result with out-of-view information and UI filtering stats
                 result_dict = {
                     "text": result,
                     "out_of_view_texts": out_of_view_texts,
-                    "total_regions": len(current_text_regions),
-                    "tracking_enabled": True
+                    "total_regions": len(all_text_regions),
+                    "content_regions": len(current_text_regions),
+                    "ui_elements_filtered": ui_filtered_count,
+                    "tracking_enabled": True,
+                    "ui_filtering_enabled": self.filter_ui_elements
                 }
                 
                 # Add warning if text went out of view
@@ -354,7 +462,20 @@ class SeeingAIShortTextProcessor(BaseProcessor):
             processed_image = self._preprocess_image(frame)
             
             # Extract text with position information
-            extracted_text, current_text_regions = self._extract_text_with_easyocr(processed_image)
+            extracted_text, all_text_regions = self._extract_text_with_easyocr(processed_image)
+            
+            # Apply UI filtering if enabled
+            if self.filter_ui_elements:
+                content_regions, ui_regions = self._filter_ui_text(all_text_regions, self.image_dimensions)
+                # Rebuild text from content regions only
+                content_texts = [region['text'] for region in content_regions]
+                extracted_text = ' '.join(content_texts)
+                # Use content regions for further processing
+                current_text_regions = content_regions
+                ui_filtered_count = len(ui_regions)
+            else:
+                current_text_regions = all_text_regions
+                ui_filtered_count = 0
             
             # Clean and format text
             final_text = self._clean_and_format_text(extracted_text)
@@ -377,8 +498,11 @@ class SeeingAIShortTextProcessor(BaseProcessor):
                 "full_text": final_text if final_text else "No text detected",
                 "out_of_view_texts": out_of_view_texts,
                 "in_view_regions": len(in_view_texts),
-                "total_regions": len(current_text_regions),
+                "total_regions": len(all_text_regions),
+                "content_regions": len(current_text_regions),
+                "ui_elements_filtered": ui_filtered_count,
                 "tracking_enabled": True,
+                "ui_filtering_enabled": self.filter_ui_elements,
                 "viewing_bounds": viewing_bounds
             }
             
