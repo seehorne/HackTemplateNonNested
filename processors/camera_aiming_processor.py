@@ -172,8 +172,9 @@ class CameraAimingProcessor(BaseProcessor):
             # Calculate extent
             extent = area / rect_area if rect_area > 0 else 0
             
-            # Must be reasonably rectangular (extent > 0.5 means it fills >50% of bounding box)
-            if extent < 0.5:
+            # Documents should fill their bounding box very well (stricter than before)
+            # Textured surfaces often have irregular contours with low extent
+            if extent < 0.70:
                 continue
             
             # Score based PRIMARILY on rectangularity
@@ -202,10 +203,29 @@ class CameraAimingProcessor(BaseProcessor):
             elif 0.05 <= size_ratio <= 0.85:
                 score += 1
             
-            # Brightness is LEAST important (minor bonus only)
+            # Check color uniformity - documents should be relatively uniform
+            # Textured surfaces (carpets, floors) have high variance
             mask = np.zeros(gray.shape, dtype=np.uint8)
             cv2.drawContours(mask, [contour], -1, 255, -1)
             mean_intensity = cv2.mean(gray, mask=mask)[0]
+            
+            # Calculate standard deviation of intensity (texture measure)
+            masked_region = gray[mask > 0]
+            if len(masked_region) > 0:
+                intensity_std = np.std(masked_region)
+                
+                # Documents have low texture (std < 30), carpets/floors have high texture
+                if intensity_std > 40:
+                    # Very textured - probably not a document
+                    continue
+                elif intensity_std < 20:
+                    # Low texture - likely a document
+                    score += 2
+                elif intensity_std < 30:
+                    # Medium texture - could be document
+                    score += 1
+            
+            # Brightness bonus (minor)
             if mean_intensity > 160:
                 score += 1
             
@@ -213,15 +233,19 @@ class CameraAimingProcessor(BaseProcessor):
                 best_score = score
                 best_contour = contour
         
-        # Return if we found something reasonably rectangular (score >= 7)
-        if best_score >= 7.0:
+        # Stricter threshold - require good score to avoid false positives
+        # Rectangularity * 10 + texture (2) + other features = up to ~20 points
+        # Require at least 9 points (high rectangularity + some other good features)
+        if best_score >= 9.0:
             return best_contour
         
-        # Lower threshold for less perfect rectangles (score >= 5)
-        # Rectangularity * 10 gives up to 10 points, so 5 means 50% rectangular + some other features
-        if best_score >= 5.0 and best_contour is not None:
+        # Lower threshold for very high extent/rectangularity
+        if best_score >= 7.0 and best_contour is not None:
             area = cv2.contourArea(best_contour)
-            if area > frame_area * 0.03:
+            x, y, w, h = cv2.boundingRect(best_contour)
+            extent = area / (w * h) if (w * h) > 0 else 0
+            # Only accept if extent is very high (fills bounding box well)
+            if extent > 0.80 and area > frame_area * 0.05:
                 return best_contour
         
         return None
