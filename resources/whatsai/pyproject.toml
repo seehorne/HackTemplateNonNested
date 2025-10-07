@@ -31,7 +31,8 @@ dependencies = [
     "uvicorn[standard]",
     "timm",
     "einops",
-    "opencv-contrib-python"
+    "opencv-contrib-python",
+    "easyocr"
 ]
 
 [project.urls]
