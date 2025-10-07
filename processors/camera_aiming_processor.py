@@ -65,71 +65,54 @@ class CameraAimingProcessor(BaseProcessor):
         
         return blurred
     
-    def _simple_bright_region_detection(self, gray: np.ndarray) -> Optional[np.ndarray]:
+    def _is_rectangular(self, contour: np.ndarray) -> float:
         """
-        Fallback: Simple detection of bright rectangular regions
-        Useful for white documents on darker backgrounds
+        Calculate how rectangular a contour is (0-1 score)
+        Higher score means more rectangular
+        
+        Returns:
+            float: Rectangularity score (0-1)
         """
-        frame_height, frame_width = gray.shape[:2]
-        frame_area = frame_height * frame_width
+        # Approximate the contour to a polygon
+        peri = cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
         
-        # Find bright regions using adaptive thresholding (works better with varying lighting)
-        adaptive_thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                                cv2.THRESH_BINARY, 21, -5)
+        # Get bounding rectangle
+        x, y, w, h = cv2.boundingRect(contour)
+        rect_area = w * h
         
-        # Also try simple threshold
-        _, simple_thresh = cv2.threshold(gray, 120, 255, cv2.THRESH_BINARY)
+        # Calculate extent (how well contour fills bounding box)
+        area = cv2.contourArea(contour)
+        extent = area / rect_area if rect_area > 0 else 0
         
-        # Combine both
-        combined = cv2.bitwise_or(adaptive_thresh, simple_thresh)
+        # Calculate convexity
+        hull = cv2.convexHull(contour)
+        hull_area = cv2.contourArea(hull)
+        solidity = area / hull_area if hull_area > 0 else 0
         
-        # Clean up
-        kernel = np.ones((5, 5), np.uint8)
-        combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel, iterations=3)
-        combined = cv2.morphologyEx(combined, cv2.MORPH_OPEN, kernel, iterations=2)
+        # Score based on multiple factors
+        score = 0.0
         
-        # Find contours of bright regions
-        contours, _ = cv2.findContours(combined, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # 1. Number of corners (4 is ideal for rectangle)
+        if len(approx) == 4:
+            score += 0.5  # Perfect rectangle
+        elif 4 <= len(approx) <= 6:
+            score += 0.3  # Close to rectangle
+        elif len(approx) <= 8:
+            score += 0.1  # Somewhat rectangular
         
-        if not contours:
-            return None
+        # 2. Extent (should fill bounding box well)
+        score += extent * 0.3
         
-        # Sort by area and find the largest reasonable one
-        contours = sorted(contours, key=cv2.contourArea, reverse=True)
+        # 3. Solidity (should be convex, not irregular)
+        score += solidity * 0.2
         
-        for contour in contours[:5]:  # Check top 5 largest
-            area = cv2.contourArea(contour)
-            
-            # Must be at least 3% of frame (very small documents)
-            if area < frame_area * 0.03:
-                continue
-            
-            # Skip if too large (> 90% likely the whole frame)
-            if area > frame_area * 0.90:
-                continue
-            
-            # Get bounding rect
-            x, y, w, h = cv2.boundingRect(contour)
-            
-            # Check aspect ratio (very lenient)
-            aspect_ratio = float(w) / h if h > 0 else 0
-            if not (0.2 <= aspect_ratio <= 5.0):
-                continue
-            
-            # Calculate extent
-            rect_area = w * h
-            extent = area / rect_area if rect_area > 0 else 0
-            
-            # Accept if somewhat rectangular (extent > 0.2)
-            if extent > 0.2:
-                return contour
-        
-        return None
+        return min(score, 1.0)
     
     def _detect_document_contour(self, frame: np.ndarray) -> Optional[np.ndarray]:
         """
-        Detect the largest rectangular contour that likely represents a document
-        Uses multiple strategies for robust detection
+        Detect document by prioritizing RECTANGULARITY over color/brightness
+        A document is defined by: straight edges, 4 corners, high extent
         
         Args:
             frame (np.ndarray): Input frame
@@ -142,106 +125,68 @@ class CameraAimingProcessor(BaseProcessor):
         frame_height, frame_width = frame.shape[:2]
         frame_area = frame_height * frame_width
         
-        # Strategy 1: Threshold-based detection with multiple thresholds
-        # Use Otsu's thresholding
-        _, thresh_otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        # Use edge detection - this finds EDGES regardless of color
+        # Documents have strong straight edges
+        edges = cv2.Canny(gray, 50, 150)
         
-        # Also try fixed threshold for bright documents
-        _, thresh_fixed = cv2.threshold(gray, 140, 255, cv2.THRESH_BINARY)
+        # Dilate to connect nearby edges
+        kernel = np.ones((3, 3), np.uint8)
+        edges = cv2.dilate(edges, kernel, iterations=2)
         
-        # Clean up the binary images
-        kernel = np.ones((5, 5), np.uint8)
-        thresh_otsu = cv2.morphologyEx(thresh_otsu, cv2.MORPH_CLOSE, kernel, iterations=2)
-        thresh_otsu = cv2.morphologyEx(thresh_otsu, cv2.MORPH_OPEN, kernel, iterations=1)
+        # Find contours
+        contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         
-        thresh_fixed = cv2.morphologyEx(thresh_fixed, cv2.MORPH_CLOSE, kernel, iterations=2)
-        thresh_fixed = cv2.morphologyEx(thresh_fixed, cv2.MORPH_OPEN, kernel, iterations=1)
-        
-        # Find contours from both thresholds
-        contours_otsu, _ = cv2.findContours(thresh_otsu, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        contours_fixed, _ = cv2.findContours(thresh_fixed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
-        # Strategy 2: Edge detection with multiple parameter sets
-        edges1 = cv2.Canny(gray, 30, 90)
-        edges2 = cv2.Canny(gray, 50, 150)
-        
-        kernel_edge = np.ones((5, 5), np.uint8)
-        edges1 = cv2.dilate(edges1, kernel_edge, iterations=1)
-        edges1 = cv2.morphologyEx(edges1, cv2.MORPH_CLOSE, kernel_edge, iterations=2)
-        
-        edges2 = cv2.dilate(edges2, kernel_edge, iterations=1)
-        edges2 = cv2.morphologyEx(edges2, cv2.MORPH_CLOSE, kernel_edge, iterations=2)
-        
-        # Find contours from edges
-        contours_edge1, _ = cv2.findContours(edges1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        contours_edge2, _ = cv2.findContours(edges2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
-        # Combine contours from all strategies
-        all_contours = (list(contours_otsu) + list(contours_fixed) + 
-                       list(contours_edge1) + list(contours_edge2))
-        
-        if not all_contours:
+        if not contours:
             return None
         
-        # Sort contours by area
-        all_contours = sorted(all_contours, key=cv2.contourArea, reverse=True)
-        
-        # Find best document candidate
+        # Evaluate each contour based on RECTANGULARITY, not color
         best_contour = None
         best_score = 0
         
-        for contour in all_contours[:20]:  # Check top 20 largest contours
+        for contour in contours:
             area = cv2.contourArea(contour)
             
-            # Skip if too small (must be at least 5% of frame for real-world detection)
-            if area < frame_area * 0.05:
+            # Must be at least 3% of frame
+            if area < frame_area * 0.03:
+                continue
+            
+            # Skip if unreasonably large (> 95% means it's probably the frame edge)
+            if area > frame_area * 0.95:
                 continue
             
             # Get bounding rectangle
             x, y, w, h = cv2.boundingRect(contour)
+            rect_area = w * h
             
-            # Check if contour touches all frame edges (likely frame boundary)
-            margin = 8
-            touches_all = (x < margin and y < margin and 
-                          (x + w) > (frame_width - margin) and 
-                          (y + h) > (frame_height - margin))
-            
-            if touches_all and area > frame_area * 0.88:
-                continue
+            # Calculate how rectangular it is
+            rectangularity = self._is_rectangular(contour)
             
             # Calculate aspect ratio
             aspect_ratio = float(w) / h if h > 0 else 0
             
-            # Document-like aspect ratios (0.5 to 2.0 for flexibility)
-            if not (0.5 <= aspect_ratio <= 2.0):
+            # Documents have typical aspect ratios (0.5 to 2.0, covering portrait and landscape)
+            if not (0.4 <= aspect_ratio <= 2.5):
                 continue
             
-            # Approximate the contour
-            peri = cv2.arcLength(contour, True)
-            approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
+            # Calculate extent
+            extent = area / rect_area if rect_area > 0 else 0
             
-            # Calculate extent (how well contour fills bounding box)
-            rect_area = w * h
-            extent = float(area) / rect_area if rect_area > 0 else 0
-            
-            # Skip if very irregular
-            if extent < 0.4:
+            # Must be reasonably rectangular (extent > 0.5 means it fills >50% of bounding box)
+            if extent < 0.5:
                 continue
             
-            # Score the contour
-            score = 0
+            # Score based PRIMARILY on rectangularity
+            score = rectangularity * 10.0  # Max 10 points for perfect rectangle
             
-            # Rectangularity score
-            if len(approx) == 4:
-                score += 4
-            elif 4 <= len(approx) <= 6:
+            # Add points for good aspect ratio (typical document proportions)
+            if 0.6 <= aspect_ratio <= 1.7:
                 score += 3
-            elif len(approx) <= 8:
+            elif 0.5 <= aspect_ratio <= 2.0:
                 score += 2
             else:
                 score += 1
             
-            # Extent score
+            # Add points for high extent (fills bounding box well)
             if extent > 0.85:
                 score += 3
             elif extent > 0.70:
@@ -249,66 +194,34 @@ class CameraAimingProcessor(BaseProcessor):
             else:
                 score += 1
             
-            # Aspect ratio score (prefer typical document ratios)
-            if 0.65 <= aspect_ratio <= 1.55:
-                score += 3
-            elif 0.5 <= aspect_ratio <= 2.0:
-                score += 1
-            
-            # Size score (prefer medium to large documents, but accept small ones too)
+            # Size matters but less than rectangularity
             size_ratio = area / frame_area
-            if 0.3 <= size_ratio <= 0.75:
-                score += 3
-            elif 0.15 <= size_ratio <= 0.85:
+            if 0.15 <= size_ratio <= 0.70:
                 score += 2
-            elif 0.08 <= size_ratio < 0.15:
-                score += 2  # Still give decent score to smaller documents
-            elif size_ratio >= 0.08:
+            elif 0.05 <= size_ratio <= 0.85:
                 score += 1
             
-            # Bonus: If document appears to be white/bright (typical for paper)
-            # Check mean intensity in the contour region
+            # Brightness is LEAST important (minor bonus only)
             mask = np.zeros(gray.shape, dtype=np.uint8)
             cv2.drawContours(mask, [contour], -1, 255, -1)
             mean_intensity = cv2.mean(gray, mask=mask)[0]
-            if mean_intensity > 180:  # Bright document
-                score += 2
-            elif mean_intensity > 150:
+            if mean_intensity > 160:
                 score += 1
             
-            # Update best if this is better
             if score > best_score:
                 best_score = score
                 best_contour = contour
         
-        # Very lenient threshold for real-world documents
-        # Accept documents with score of 3 or more (was 4)
-        # This allows small, imperfectly detected documents to still be recognized
-        if best_score >= 3:
+        # Return if we found something reasonably rectangular (score >= 7)
+        if best_score >= 7.0:
             return best_contour
         
-        # If no good candidate but we have something reasonably sized, use it as fallback
-        # This handles cases where detection isn't perfect but there's clearly something there
-        if best_contour is not None and best_score >= 2:
+        # Lower threshold for less perfect rectangles (score >= 5)
+        # Rectangularity * 10 gives up to 10 points, so 5 means 50% rectangular + some other features
+        if best_score >= 5.0 and best_contour is not None:
             area = cv2.contourArea(best_contour)
-            if area > frame_area * 0.10:  # At least 10% of frame
+            if area > frame_area * 0.03:
                 return best_contour
-        
-        # Final fallback: Use simple bright region detection
-        # This is specifically for white/light documents that the edge detection may have missed
-        try:
-            fallback_contour = self._simple_bright_region_detection(gray)
-            if fallback_contour is not None:
-                return fallback_contour
-        except Exception as e:
-            print(f"Fallback detection error: {e}")
-        
-        # Absolute last resort: if we found ANY contour, use the largest one
-        if all_contours:
-            largest = max(all_contours, key=cv2.contourArea)
-            area = cv2.contourArea(largest)
-            if area > frame_area * 0.05:
-                return largest
         
         return None
     
@@ -372,9 +285,9 @@ class CameraAimingProcessor(BaseProcessor):
         guidance_parts = []
         
         # Distance guidance (coverage-based)
-        if coverage < self.min_coverage:
-            return "No document detected. Please point your camera at a document."
-        elif coverage < self.target_coverage - 0.1:
+        # If we detected a document, give guidance regardless of size
+        # Don't say "no document" just because it's small - we already found it!
+        if coverage < self.target_coverage - 0.1:
             guidance_parts.append("Move closer")
         elif coverage > self.max_coverage:
             guidance_parts.append("Move back")
