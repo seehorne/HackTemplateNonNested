@@ -314,35 +314,22 @@ class CameraAimingProcessor(BaseProcessor):
             if contour is not None:
                 metrics = self._calculate_document_metrics(contour, frame.shape)
                 guidance = self._generate_aiming_guidance(metrics)
-                
-                # Create result dictionary
-                result = {
-                    "guidance": guidance,
-                    "document_detected": True,
-                    "coverage": f"{metrics['coverage']*100:.1f}%",
-                    "center_offset_x": f"{metrics['offset_x']*100:.1f}%",
-                    "center_offset_y": f"{metrics['offset_y']*100:.1f}%",
-                    "well_framed": "Perfect" in guidance or "Good" in guidance
-                }
             else:
                 guidance = "No document detected. Please point your camera at a document."
                 metrics = None
-                result = {
-                    "guidance": guidance,
-                    "document_detected": False
-                }
             
             # Draw overlay
             output_frame = self._draw_guidance_overlay(frame, contour, metrics, guidance)
             
-            return output_frame, result
+            # Return just the guidance message - simple and focused
+            return output_frame, guidance
             
         except Exception as e:
             import traceback
             error_msg = f"Error in camera aiming: {str(e)}"
             print(f"ERROR: {error_msg}")
             print(traceback.format_exc())
-            return frame, {"guidance": "Error processing frame", "error": error_msg}
+            return frame, "Error processing frame"
     
     def process_pointcloud(self, point_cloud_data: Dict) -> Tuple[Optional[Dict], Union[str, Dict]]:
         """
