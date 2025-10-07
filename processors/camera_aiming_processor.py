@@ -302,7 +302,13 @@ class CameraAimingProcessor(BaseProcessor):
     
     def _generate_aiming_guidance(self, metrics: Dict) -> str:
         """
-        Generate human-readable aiming guidance
+        Generate human-readable aiming guidance optimized for blind/low vision users
+        
+        Key principles for accessibility:
+        - ALWAYS give directional guidance (camera movement) first when document is off-center
+        - Use camera-relative directions ("move camera left/right/up/down") not "move closer"
+        - Provide positive feedback when well-framed to build confidence
+        - Coverage is secondary to alignment for blind users
         
         Args:
             metrics (Dict): Document metrics from _calculate_document_metrics
@@ -314,44 +320,79 @@ class CameraAimingProcessor(BaseProcessor):
         offset_x = metrics['offset_x']
         offset_y = metrics['offset_y']
         
-        guidance_parts = []
+        directional_guidance = []
+        distance_guidance = None
         
-        # Distance guidance (coverage-based)
-        # If we detected a document, give guidance regardless of size
-        # Don't say "no document" just because it's small - we already found it!
-        if coverage < self.target_coverage - 0.1:
-            guidance_parts.append("Move closer")
-        elif coverage > self.max_coverage:
-            guidance_parts.append("Move back")
+        # PRIORITY 1: Directional guidance (most important for blind users)
+        # Use camera-relative language: "move camera left/right/up/down"
+        # This helps users know which direction to adjust to find the document
         
-        # Horizontal alignment
+        # Horizontal alignment (more lenient threshold for initial guidance)
         if abs(offset_x) > self.center_tolerance:
             if offset_x > 0:
-                guidance_parts.append("move left")
+                # Document is to the right, move camera left
+                directional_guidance.append("move camera left")
             else:
-                guidance_parts.append("move right")
+                # Document is to the left, move camera right  
+                directional_guidance.append("move camera right")
         
         # Vertical alignment
         if abs(offset_y) > self.center_tolerance:
             if offset_y > 0:
-                guidance_parts.append("move down")
+                # Document is below center, tilt camera down
+                directional_guidance.append("tilt camera down")
             else:
-                guidance_parts.append("move up")
+                # Document is above center, tilt camera up
+                directional_guidance.append("tilt camera up")
         
-        # Perfect alignment
-        if not guidance_parts:
-            if abs(coverage - self.target_coverage) < 0.05:
+        # PRIORITY 2: Distance/coverage guidance (secondary)
+        # Only give distance guidance if directional is good or coverage is very off
+        if coverage < self.min_coverage:
+            # Very small - might be too far or wrong object
+            distance_guidance = "move much closer"
+        elif coverage < self.target_coverage - 0.15:
+            # Below target, needs to be closer
+            distance_guidance = "move closer"
+        elif coverage > self.max_coverage:
+            # Too close
+            distance_guidance = "move back"
+        
+        # CASE 1: Perfect or near-perfect framing
+        if not directional_guidance and not distance_guidance:
+            if abs(coverage - self.target_coverage) < 0.10:
+                # Within 10% of target - perfect
                 return "Perfect! Document is well-framed."
+            elif coverage >= self.target_coverage * 0.75:
+                # Close enough to target (within 75% = 45%+ coverage) - good
+                return "Good framing! Document is centered."
+            elif coverage >= self.min_coverage:
+                # Above minimum threshold - centered but could be closer
+                return "Centered. Move slightly closer to fill frame."
             elif coverage < self.target_coverage:
-                return "Good alignment. Move slightly closer."
+                return "Centered. Move closer to fill frame."
             else:
-                return "Good alignment. Move slightly back."
+                return "Centered. Move slightly back."
         
-        # Combine guidance parts with coverage hint for context
+        # CASE 2: Well-centered but wrong distance
+        if not directional_guidance and distance_guidance:
+            coverage_pct = int(coverage * 100)
+            if coverage < self.target_coverage * 0.7:
+                return f"Well-centered! Now {distance_guidance}. (Coverage: {coverage_pct}%)"
+            else:
+                return f"Well-centered. {distance_guidance.capitalize()}."
+        
+        # CASE 3: Needs directional adjustment (PRIMARY USE CASE for blind users)
+        # Always lead with directional guidance
+        guidance_str = directional_guidance[0].capitalize()
+        if len(directional_guidance) > 1:
+            guidance_str += " and " + directional_guidance[1]
+        
+        # Add distance if also needed, but directional is primary
+        if distance_guidance and coverage < self.min_coverage * 1.5:
+            guidance_str += f", then {distance_guidance}"
+        
+        # Add coverage for context (helps users track progress)
         coverage_pct = int(coverage * 100)
-        guidance_str = guidance_parts[0].capitalize()
-        if len(guidance_parts) > 1:
-            guidance_str += ", " + ", ".join(guidance_parts[1:])
         guidance_str += f". (Coverage: {coverage_pct}%)"
         
         return guidance_str
