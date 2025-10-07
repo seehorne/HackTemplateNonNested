@@ -339,6 +339,34 @@
                 <label for="ocrLanguageSelect" class="setting-label">OCR Language (Recognize In):</label>
                 <select id="ocrLanguageSelect" aria-describedby="ocrLanguageSelectDesc">
                     <option value="en" selected>English</option>
+                    <option value="ch_sim">Chinese (Simplified)</option>
+                    <option value="ch_tra">Chinese (Traditional)</option>
+                    <option value="ja">Japanese</option>
+                    <option value="ko">Korean</option>
+                    <option value="ar">Arabic</option>
+                    <option value="bn">Bengali</option>
+                    <option value="cs">Czech</option>
+                    <option value="da">Danish</option>
+                    <option value="nl">Dutch</option>
+                    <option value="fi">Finnish</option>
+                    <option value="fr">French</option>
+                    <option value="de">German</option>
+                    <option value="el">Greek</option>
+                    <option value="hi">Hindi</option>
+                    <option value="hu">Hungarian</option>
+                    <option value="id">Indonesian</option>
+                    <option value="it">Italian</option>
+                    <option value="no">Norwegian</option>
+                    <option value="pl">Polish</option>
+                    <option value="pt">Portuguese</option>
+                    <option value="ro">Romanian</option>
+                    <option value="ru">Russian</option>
+                    <option value="es">Spanish</option>
+                    <option value="sv">Swedish</option>
+                    <option value="th">Thai</option>
+                    <option value="tr">Turkish</option>
+                    <option value="vi">Vietnamese</option>
+                    <option value="uk">Ukrainian</option>
                 </select>
                 <button id="applyLanguageButton" class="fetch-processors" aria-label="Apply language selection">Apply</button>
                 <p id="ocrLanguageSelectDesc" class="hidden">Select the language for text recognition</p>
@@ -853,7 +881,7 @@
                 const seeingAIProcessor = processorConfig.processors.find(p => p.name === 'seeing_ai_short_text_processor');
                 
                 if (!seeingAIProcessor) {
-                    console.log('SeeingAI processor not found');
+                    console.log('SeeingAI processor not found - using hardcoded language list');
                     return;
                 }
                 
@@ -862,19 +890,22 @@
                 if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
                 const data = await response.json();
                 
-                ocrLanguageSelect.innerHTML = '';
+                // Merge with existing hardcoded list (backend may have additional languages)
+                const existingCodes = Array.from(ocrLanguageSelect.options).map(opt => opt.value);
                 data.languages.forEach(lang => {
-                    const option = document.createElement('option');
-                    option.value = lang.code;
-                    option.textContent = lang.name;
-                    if (lang.code === 'en') { option.selected = true; }
-                    ocrLanguageSelect.appendChild(option);
+                    if (!existingCodes.includes(lang.code)) {
+                        const option = document.createElement('option');
+                        option.value = lang.code;
+                        option.textContent = lang.name;
+                        ocrLanguageSelect.appendChild(option);
+                    }
                 });
                 
-                console.log('Supported languages loaded successfully');
+                console.log('Supported languages loaded successfully from backend');
             } catch (error) {
-                console.error('Error fetching supported languages:', error);
-                ocrLanguageSelect.innerHTML = '<option value="en" selected>English</option>';
+                console.error('Error fetching supported languages from backend:', error);
+                console.log('Using hardcoded language list');
+                // Keep the hardcoded languages that are already in the dropdown
             }
         }
         
