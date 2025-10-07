@@ -65,6 +65,67 @@ class CameraAimingProcessor(BaseProcessor):
         
         return blurred
     
+    def _simple_bright_region_detection(self, gray: np.ndarray) -> Optional[np.ndarray]:
+        """
+        Fallback: Simple detection of bright rectangular regions
+        Useful for white documents on darker backgrounds
+        """
+        frame_height, frame_width = gray.shape[:2]
+        frame_area = frame_height * frame_width
+        
+        # Find bright regions using adaptive thresholding (works better with varying lighting)
+        adaptive_thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                                cv2.THRESH_BINARY, 21, -5)
+        
+        # Also try simple threshold
+        _, simple_thresh = cv2.threshold(gray, 120, 255, cv2.THRESH_BINARY)
+        
+        # Combine both
+        combined = cv2.bitwise_or(adaptive_thresh, simple_thresh)
+        
+        # Clean up
+        kernel = np.ones((5, 5), np.uint8)
+        combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel, iterations=3)
+        combined = cv2.morphologyEx(combined, cv2.MORPH_OPEN, kernel, iterations=2)
+        
+        # Find contours of bright regions
+        contours, _ = cv2.findContours(combined, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        if not contours:
+            return None
+        
+        # Sort by area and find the largest reasonable one
+        contours = sorted(contours, key=cv2.contourArea, reverse=True)
+        
+        for contour in contours[:5]:  # Check top 5 largest
+            area = cv2.contourArea(contour)
+            
+            # Must be at least 3% of frame (very small documents)
+            if area < frame_area * 0.03:
+                continue
+            
+            # Skip if too large (> 90% likely the whole frame)
+            if area > frame_area * 0.90:
+                continue
+            
+            # Get bounding rect
+            x, y, w, h = cv2.boundingRect(contour)
+            
+            # Check aspect ratio (very lenient)
+            aspect_ratio = float(w) / h if h > 0 else 0
+            if not (0.2 <= aspect_ratio <= 5.0):
+                continue
+            
+            # Calculate extent
+            rect_area = w * h
+            extent = area / rect_area if rect_area > 0 else 0
+            
+            # Accept if somewhat rectangular (extent > 0.2)
+            if extent > 0.2:
+                return contour
+        
+        return None
+    
     def _detect_document_contour(self, frame: np.ndarray) -> Optional[np.ndarray]:
         """
         Detect the largest rectangular contour that likely represents a document
@@ -81,29 +142,43 @@ class CameraAimingProcessor(BaseProcessor):
         frame_height, frame_width = frame.shape[:2]
         frame_area = frame_height * frame_width
         
-        # Strategy 1: Threshold-based detection (finds bright documents on dark backgrounds)
-        # Use Otsu's thresholding to separate document from background
-        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        # Strategy 1: Threshold-based detection with multiple thresholds
+        # Use Otsu's thresholding
+        _, thresh_otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         
-        # Clean up the binary image
+        # Also try fixed threshold for bright documents
+        _, thresh_fixed = cv2.threshold(gray, 140, 255, cv2.THRESH_BINARY)
+        
+        # Clean up the binary images
         kernel = np.ones((5, 5), np.uint8)
-        thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=2)
-        thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=1)
+        thresh_otsu = cv2.morphologyEx(thresh_otsu, cv2.MORPH_CLOSE, kernel, iterations=2)
+        thresh_otsu = cv2.morphologyEx(thresh_otsu, cv2.MORPH_OPEN, kernel, iterations=1)
         
-        # Find contours from threshold
-        contours_thresh, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        thresh_fixed = cv2.morphologyEx(thresh_fixed, cv2.MORPH_CLOSE, kernel, iterations=2)
+        thresh_fixed = cv2.morphologyEx(thresh_fixed, cv2.MORPH_OPEN, kernel, iterations=1)
         
-        # Strategy 2: Edge detection
-        edges = cv2.Canny(gray, 50, 150)
+        # Find contours from both thresholds
+        contours_otsu, _ = cv2.findContours(thresh_otsu, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours_fixed, _ = cv2.findContours(thresh_fixed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Strategy 2: Edge detection with multiple parameter sets
+        edges1 = cv2.Canny(gray, 30, 90)
+        edges2 = cv2.Canny(gray, 50, 150)
+        
         kernel_edge = np.ones((5, 5), np.uint8)
-        edges = cv2.dilate(edges, kernel_edge, iterations=1)
-        edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel_edge, iterations=2)
+        edges1 = cv2.dilate(edges1, kernel_edge, iterations=1)
+        edges1 = cv2.morphologyEx(edges1, cv2.MORPH_CLOSE, kernel_edge, iterations=2)
+        
+        edges2 = cv2.dilate(edges2, kernel_edge, iterations=1)
+        edges2 = cv2.morphologyEx(edges2, cv2.MORPH_CLOSE, kernel_edge, iterations=2)
         
         # Find contours from edges
-        contours_edge, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours_edge1, _ = cv2.findContours(edges1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours_edge2, _ = cv2.findContours(edges2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        # Combine contours from both strategies
-        all_contours = list(contours_thresh) + list(contours_edge)
+        # Combine contours from all strategies
+        all_contours = (list(contours_otsu) + list(contours_fixed) + 
+                       list(contours_edge1) + list(contours_edge2))
         
         if not all_contours:
             return None
@@ -115,11 +190,11 @@ class CameraAimingProcessor(BaseProcessor):
         best_contour = None
         best_score = 0
         
-        for contour in all_contours[:15]:  # Check top 15 largest contours
+        for contour in all_contours[:20]:  # Check top 20 largest contours
             area = cv2.contourArea(contour)
             
-            # Skip if too small (must be at least 8% of frame)
-            if area < frame_area * 0.08:
+            # Skip if too small (must be at least 5% of frame for real-world detection)
+            if area < frame_area * 0.05:
                 continue
             
             # Get bounding rectangle
@@ -180,13 +255,25 @@ class CameraAimingProcessor(BaseProcessor):
             elif 0.5 <= aspect_ratio <= 2.0:
                 score += 1
             
-            # Size score (prefer medium to large documents)
+            # Size score (prefer medium to large documents, but accept small ones too)
             size_ratio = area / frame_area
             if 0.3 <= size_ratio <= 0.75:
                 score += 3
             elif 0.15 <= size_ratio <= 0.85:
                 score += 2
-            elif 0.08 <= size_ratio:
+            elif 0.08 <= size_ratio < 0.15:
+                score += 2  # Still give decent score to smaller documents
+            elif size_ratio >= 0.08:
+                score += 1
+            
+            # Bonus: If document appears to be white/bright (typical for paper)
+            # Check mean intensity in the contour region
+            mask = np.zeros(gray.shape, dtype=np.uint8)
+            cv2.drawContours(mask, [contour], -1, 255, -1)
+            mean_intensity = cv2.mean(gray, mask=mask)[0]
+            if mean_intensity > 180:  # Bright document
+                score += 2
+            elif mean_intensity > 150:
                 score += 1
             
             # Update best if this is better
@@ -194,8 +281,36 @@ class CameraAimingProcessor(BaseProcessor):
                 best_score = score
                 best_contour = contour
         
-        # Accept if score is reasonable (lowered threshold for better detection)
-        return best_contour if best_score >= 5 else None
+        # Very lenient threshold for real-world documents
+        # Accept documents with score of 3 or more (was 4)
+        # This allows small, imperfectly detected documents to still be recognized
+        if best_score >= 3:
+            return best_contour
+        
+        # If no good candidate but we have something reasonably sized, use it as fallback
+        # This handles cases where detection isn't perfect but there's clearly something there
+        if best_contour is not None and best_score >= 2:
+            area = cv2.contourArea(best_contour)
+            if area > frame_area * 0.10:  # At least 10% of frame
+                return best_contour
+        
+        # Final fallback: Use simple bright region detection
+        # This is specifically for white/light documents that the edge detection may have missed
+        try:
+            fallback_contour = self._simple_bright_region_detection(gray)
+            if fallback_contour is not None:
+                return fallback_contour
+        except Exception as e:
+            print(f"Fallback detection error: {e}")
+        
+        # Absolute last resort: if we found ANY contour, use the largest one
+        if all_contours:
+            largest = max(all_contours, key=cv2.contourArea)
+            area = cv2.contourArea(largest)
+            if area > frame_area * 0.05:
+                return largest
+        
+        return None
     
     def _calculate_document_metrics(self, contour: np.ndarray, frame_shape: Tuple[int, int, int]) -> Dict:
         """
