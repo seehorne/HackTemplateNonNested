@@ -355,3 +355,7 @@ class CameraAimingProcessor(BaseProcessor):
             tuple: (None, error_message)
         """
         return None, {"error": "Camera Aiming processor does not support point cloud data"}
+
+# Instantiate processor and expose app for uvicorn
+processor = CameraAimingProcessor()
+app = processor.app
