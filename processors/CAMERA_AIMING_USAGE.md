@@ -4,6 +4,9 @@
 
 The Camera Aiming Processor (ID: 13) provides real-time camera guidance for document capture, similar to Microsoft Seeing AI's document mode. It helps users properly frame documents by detecting document edges and providing clear directional feedback.
 
+![Camera Aiming Demo](camera_aiming_demo.jpg)
+*Demo showing various document positions and the guidance provided*
+
 ## Features
 
 - **CPU-Only Processing**: No GPU required, uses OpenCV's CPU-optimized algorithms
