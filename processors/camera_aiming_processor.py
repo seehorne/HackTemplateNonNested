@@ -56,17 +56,19 @@ class CameraAimingProcessor(BaseProcessor):
         # Convert to grayscale
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
-        # Apply bilateral filter to reduce noise while preserving edges
-        filtered = cv2.bilateralFilter(gray, 9, 75, 75)
+        # Apply adaptive histogram equalization to improve contrast
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(gray)
         
-        # Apply Gaussian blur to further reduce noise
-        blurred = cv2.GaussianBlur(filtered, (5, 5), 0)
+        # Apply Gaussian blur to reduce noise
+        blurred = cv2.GaussianBlur(enhanced, (5, 5), 0)
         
         return blurred
     
     def _detect_document_contour(self, frame: np.ndarray) -> Optional[np.ndarray]:
         """
         Detect the largest rectangular contour that likely represents a document
+        Uses multiple strategies for robust detection
         
         Args:
             frame (np.ndarray): Input frame
@@ -76,62 +78,124 @@ class CameraAimingProcessor(BaseProcessor):
         """
         # Preprocess
         gray = self._preprocess_image(frame)
+        frame_height, frame_width = frame.shape[:2]
+        frame_area = frame_height * frame_width
         
-        # Edge detection with adaptive thresholds
-        edges = cv2.Canny(gray, self.edge_threshold_low, self.edge_threshold_high)
+        # Strategy 1: Threshold-based detection (finds bright documents on dark backgrounds)
+        # Use Otsu's thresholding to separate document from background
+        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         
-        # Dilate edges to close gaps
+        # Clean up the binary image
         kernel = np.ones((5, 5), np.uint8)
-        dilated = cv2.dilate(edges, kernel, iterations=2)
+        thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=2)
+        thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=1)
         
-        # Also try closing to connect nearby edges
-        closed = cv2.morphologyEx(dilated, cv2.MORPH_CLOSE, kernel, iterations=1)
+        # Find contours from threshold
+        contours_thresh, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        # Find contours
-        contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # Strategy 2: Edge detection
+        edges = cv2.Canny(gray, 50, 150)
+        kernel_edge = np.ones((5, 5), np.uint8)
+        edges = cv2.dilate(edges, kernel_edge, iterations=1)
+        edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel_edge, iterations=2)
         
-        if not contours:
+        # Find contours from edges
+        contours_edge, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Combine contours from both strategies
+        all_contours = list(contours_thresh) + list(contours_edge)
+        
+        if not all_contours:
             return None
         
-        # Sort contours by area and get the largest ones
-        contours = sorted(contours, key=cv2.contourArea, reverse=True)
+        # Sort contours by area
+        all_contours = sorted(all_contours, key=cv2.contourArea, reverse=True)
         
-        frame_area = frame.shape[0] * frame.shape[1]
+        # Find best document candidate
+        best_contour = None
+        best_score = 0
         
-        # Look for rectangular contours with more lenient thresholds
-        for contour in contours[:15]:  # Check top 15 largest contours
-            # Calculate contour area
+        for contour in all_contours[:15]:  # Check top 15 largest contours
             area = cv2.contourArea(contour)
             
-            # More lenient minimum threshold - even very small documents
-            if area < frame_area * 0.05:  # At least 5% of frame
+            # Skip if too small (must be at least 8% of frame)
+            if area < frame_area * 0.08:
                 continue
             
             # Get bounding rectangle
             x, y, w, h = cv2.boundingRect(contour)
             
+            # Check if contour touches all frame edges (likely frame boundary)
+            margin = 8
+            touches_all = (x < margin and y < margin and 
+                          (x + w) > (frame_width - margin) and 
+                          (y + h) > (frame_height - margin))
+            
+            if touches_all and area > frame_area * 0.88:
+                continue
+            
             # Calculate aspect ratio
             aspect_ratio = float(w) / h if h > 0 else 0
             
-            # Document-like aspect ratios (between 0.5 and 2.5 to allow for perspective)
-            if not (0.5 <= aspect_ratio <= 2.5):
+            # Document-like aspect ratios (0.5 to 2.0 for flexibility)
+            if not (0.5 <= aspect_ratio <= 2.0):
                 continue
             
-            # Approximate the contour to a polygon
+            # Approximate the contour
             peri = cv2.arcLength(contour, True)
-            approx = cv2.approxPolyDP(contour, 0.04 * peri, True)
+            approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
             
-            # Check rectangularity - either 4 corners or contour fills bounding box well
+            # Calculate extent (how well contour fills bounding box)
             rect_area = w * h
             extent = float(area) / rect_area if rect_area > 0 else 0
             
-            # If it's reasonably rectangular (fills >50% of bounding box) or has 4 corners
-            if len(approx) >= 4 or extent > 0.5:
-                # Additional check: not too irregular
-                if extent > 0.3:  # At least 30% filled
-                    return contour
+            # Skip if very irregular
+            if extent < 0.4:
+                continue
+            
+            # Score the contour
+            score = 0
+            
+            # Rectangularity score
+            if len(approx) == 4:
+                score += 4
+            elif 4 <= len(approx) <= 6:
+                score += 3
+            elif len(approx) <= 8:
+                score += 2
+            else:
+                score += 1
+            
+            # Extent score
+            if extent > 0.85:
+                score += 3
+            elif extent > 0.70:
+                score += 2
+            else:
+                score += 1
+            
+            # Aspect ratio score (prefer typical document ratios)
+            if 0.65 <= aspect_ratio <= 1.55:
+                score += 3
+            elif 0.5 <= aspect_ratio <= 2.0:
+                score += 1
+            
+            # Size score (prefer medium to large documents)
+            size_ratio = area / frame_area
+            if 0.3 <= size_ratio <= 0.75:
+                score += 3
+            elif 0.15 <= size_ratio <= 0.85:
+                score += 2
+            elif 0.08 <= size_ratio:
+                score += 1
+            
+            # Update best if this is better
+            if score > best_score:
+                best_score = score
+                best_contour = contour
         
-        return None
+        # Accept if score is reasonable (lowered threshold for better detection)
+        return best_contour if best_score >= 5 else None
     
     def _calculate_document_metrics(self, contour: np.ndarray, frame_shape: Tuple[int, int, int]) -> Dict:
         """
