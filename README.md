@@ -60,6 +60,20 @@ The system includes several processors, ordered by complexity:
     - Queue and current speech checking to avoid duplicates
 - **Note**: First-time startup may take longer as EasyOCR downloads models automatically
 
+### Camera Aiming Processor (ID: 13) 🆕
+- **Description**: Building block processor that helps users who are blind or low vision aim their camera to center objects using non-visual audio cues
+- **Dependencies**: None (uses YOLO11 for object detection)
+- **Use Case**: Taking properly framed photos or centering objects for accessibility
+- **Reference**: Built as a reusable building block for other processors to incorporate camera aiming functionality
+- **Features**:
+  - 🎯 **Directional Guidance** - Audio cues for moving camera left/right/up/down
+  - ✅ **Centering Confirmation** - Notifies when object is properly centered
+  - 📏 **Distance Feedback** - Indicates if camera is too close or too far from object
+  - 📐 **Size Optimization** - Ensures object fills frame appropriately (30-70% optimal)
+  - 🎨 **Visual Overlay** - Optional visual indicators for sighted users (crosshairs, bounding boxes)
+  - 🔧 **Building Block Design** - Other processors can call `get_aiming_guidance()` to reuse functionality
+- **CPU-Only**: Fully compatible with CPU-only systems, no GPU required
+
 ## Setting Up Your Own Server
 
 ### Local Server Setup
