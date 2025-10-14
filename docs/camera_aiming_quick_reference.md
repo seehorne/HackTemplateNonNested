@@ -26,7 +26,17 @@
 - `no_object` - Keep scanning
 
 ### Example Response
+
+**Standalone use returns string:**
 ```python
+output_frame, message = processor.process_frame(frame)
+# message: "person centered and sized perfectly. Ready to capture!"
+```
+
+**Building block use returns full dict:**
+```python
+guidance = processor.get_aiming_guidance(frame)
+# Returns:
 {
     "status": "perfect",
     "message": "person centered and sized perfectly. Ready to capture!",
@@ -79,8 +89,8 @@ output_frame, guidance = aiming.process_frame(frame)
 ### Thresholds (can be modified)
 ```python
 CENTER_THRESHOLD = 0.15      # 15% from center is "centered"
-SIZE_OPTIMAL_MIN = 0.30      # 30% of frame is minimum optimal
-SIZE_OPTIMAL_MAX = 0.70      # 70% of frame is maximum optimal
+SIZE_OPTIMAL_MIN = 0.15      # 15% of frame is minimum optimal
+SIZE_OPTIMAL_MAX = 0.60      # 60% of frame is maximum optimal
 ```
 
 ### Constructor Parameters

@@ -26,10 +26,10 @@ class CameraAimingProcessor(BaseProcessor):
     
     # Centering thresholds
     CENTER_THRESHOLD = 0.15  # Object center must be within 15% of frame center
-    SIZE_MIN_THRESHOLD = 0.15  # Object should occupy at least 15% of frame
+    SIZE_MIN_THRESHOLD = 0.08  # Object should occupy at least 8% of frame
     SIZE_MAX_THRESHOLD = 0.85  # Object should not exceed 85% of frame
-    SIZE_OPTIMAL_MIN = 0.30  # Optimal size range: 30-70% of frame
-    SIZE_OPTIMAL_MAX = 0.70
+    SIZE_OPTIMAL_MIN = 0.15  # Optimal size range: 15-60% of frame (allows more comfortable distance)
+    SIZE_OPTIMAL_MAX = 0.60
     
     def __init__(self, 
                  model_path="./models/yolo11n-seg.pt",
@@ -48,9 +48,9 @@ class CameraAimingProcessor(BaseProcessor):
         self.target_class = target_class if isinstance(target_class, list) else ([target_class] if target_class else None)
         self.confidence_threshold = confidence_threshold
         
-    def process_frame(self, frame: np.ndarray) -> Tuple[Optional[np.ndarray], Union[str, Dict]]:
+    def _get_guidance_internal(self, frame: np.ndarray) -> Tuple[Optional[np.ndarray], Dict]:
         """
-        Process frame to provide camera aiming guidance
+        Internal method to get full guidance dictionary
         
         Args:
             frame (numpy.ndarray): Input frame to process
@@ -58,7 +58,7 @@ class CameraAimingProcessor(BaseProcessor):
         Returns:
             tuple: (processed_frame, guidance_dict)
                 - processed_frame: Frame with visual indicators (optional)
-                - guidance_dict: Dictionary with aiming guidance
+                - guidance_dict: Dictionary with full aiming guidance
         """
         # Get frame dimensions
         height, width = frame.shape[:2]
@@ -112,6 +112,22 @@ class CameraAimingProcessor(BaseProcessor):
         )
         
         return output_frame, guidance
+    
+    def process_frame(self, frame: np.ndarray) -> Tuple[Optional[np.ndarray], Union[str, Dict]]:
+        """
+        Process frame to provide camera aiming guidance
+        
+        Args:
+            frame (numpy.ndarray): Input frame to process
+            
+        Returns:
+            tuple: (processed_frame, message_string)
+                - processed_frame: Frame with visual indicators (optional)
+                - message_string: Simple message for audio output (not full dict)
+        """
+        output_frame, guidance = self._get_guidance_internal(frame)
+        # Return just the message string for clean audio output
+        return output_frame, guidance['message']
     
     def _find_target_object(self, result, frame_center, width, height) -> Optional[Dict]:
         """
@@ -316,22 +332,22 @@ class CameraAimingProcessor(BaseProcessor):
     
     def get_aiming_guidance(self, frame: np.ndarray, target_class: str = None) -> Dict:
         """
-        Helper method for other processors to get aiming guidance without visual output
+        Helper method for other processors to get full aiming guidance dictionary
         
         Args:
             frame: Input frame
             target_class: Optional specific class to target
             
         Returns:
-            Dictionary with aiming guidance
+            Dictionary with full aiming guidance (status, message, centered, etc.)
         """
         # Temporarily override target class if specified
         original_target = self.target_class
         if target_class:
             self.target_class = [target_class]
         
-        # Process frame
-        _, guidance = self.process_frame(frame)
+        # Get full guidance using internal method
+        _, guidance = self._get_guidance_internal(frame)
         
         # Restore original target
         self.target_class = original_target

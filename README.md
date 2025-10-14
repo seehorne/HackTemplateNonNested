@@ -69,7 +69,7 @@ The system includes several processors, ordered by complexity:
   - 🎯 **Directional Guidance** - Audio cues for moving camera left/right/up/down
   - ✅ **Centering Confirmation** - Notifies when object is properly centered
   - 📏 **Distance Feedback** - Indicates if camera is too close or too far from object
-  - 📐 **Size Optimization** - Ensures object fills frame appropriately (30-70% optimal)
+  - 📐 **Size Optimization** - Ensures object fills frame appropriately (15-60% optimal for comfortable distance)
   - 🎨 **Visual Overlay** - Optional visual indicators for sighted users (crosshairs, bounding boxes)
   - 🔧 **Building Block Design** - Other processors can call `get_aiming_guidance()` to reuse functionality
 - **CPU-Only**: Fully compatible with CPU-only systems, no GPU required

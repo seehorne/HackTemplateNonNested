@@ -30,8 +30,8 @@ Helps you get the right distance from the object:
 
 ### 📐 Size Optimization
 The processor considers object size:
-- **Too small** (< 15% of frame): Object is too far
-- **Optimal** (30-70% of frame): Perfect size for capture
+- **Too small** (< 8% of frame): Object is too far
+- **Optimal** (15-60% of frame): Perfect size for capture at comfortable distance
 - **Too large** (> 85% of frame): Object is too close
 
 ## Basic Usage
@@ -46,9 +46,18 @@ The processor considers object size:
 
 ### API Response Format
 
-The processor returns a structured guidance dictionary:
+**For Standalone Use (process_frame):**
+The processor returns a simple message string for clean audio output:
+```python
+output_frame, message = processor.process_frame(frame)
+# message is a string like: "Move camera left to center person."
+```
 
-```json
+**For Building Block Use (get_aiming_guidance):**
+Other processors can get the full guidance dictionary:
+```python
+guidance = processor.get_aiming_guidance(frame)
+# Returns full dictionary with all details:
 {
   "status": "centered|adjusting|perfect|too_close|too_far|no_object",
   "message": "Human-readable guidance message",
@@ -186,10 +195,10 @@ For sighted users or debugging, the processor provides visual feedback:
 
 ```python
 CENTER_THRESHOLD = 0.15      # Object center within 15% of frame center
-SIZE_MIN_THRESHOLD = 0.15    # Minimum 15% of frame
+SIZE_MIN_THRESHOLD = 0.08    # Minimum 8% of frame
 SIZE_MAX_THRESHOLD = 0.85    # Maximum 85% of frame
-SIZE_OPTIMAL_MIN = 0.30      # Optimal range: 30-70%
-SIZE_OPTIMAL_MAX = 0.70
+SIZE_OPTIMAL_MIN = 0.15      # Optimal range: 15-60% (comfortable distance)
+SIZE_OPTIMAL_MAX = 0.60
 ```
 
 ### Object Selection Priority
