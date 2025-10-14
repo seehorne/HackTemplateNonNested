@@ -73,6 +73,7 @@ The system includes several processors, ordered by complexity:
   - 🎨 **Visual Overlay** - Optional visual indicators for sighted users (crosshairs, bounding boxes)
   - 🔧 **Building Block Design** - Other processors can call `get_aiming_guidance()` to reuse functionality
 - **CPU-Only**: Fully compatible with CPU-only systems, no GPU required
+- **Documentation**: See [docs/camera_aiming_usage.md](docs/camera_aiming_usage.md) for detailed usage examples and integration guide
 
 ## Setting Up Your Own Server
 
