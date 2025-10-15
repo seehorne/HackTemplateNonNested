@@ -506,6 +506,48 @@
             return audioContext;
         }
         
+        // Geiger counter-style beep generation
+        let beepInterval = null;
+        
+        function playBeep(frequency, duration) {
+            const ctx = initializeAudioContext();
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            
+            oscillator.frequency.value = frequency;
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+            
+            oscillator.start(ctx.currentTime);
+            oscillator.stop(ctx.currentTime + duration);
+        }
+        
+        function startGeigerBeeps(beepParams) {
+            stopGeigerBeeps(); // Clear any existing beeps
+            
+            const { frequency, interval, duration } = beepParams;
+            
+            // Play first beep immediately
+            playBeep(frequency, duration);
+            
+            // Set up repeating beeps
+            beepInterval = setInterval(() => {
+                playBeep(frequency, duration);
+            }, interval * 1000);
+        }
+        
+        function stopGeigerBeeps() {
+            if (beepInterval) {
+                clearInterval(beepInterval);
+                beepInterval = null;
+            }
+        }
+        
         function processSpeechQueue() {
             if (utteranceQueue.length === 0 || isMuted) {
                 return;
@@ -1208,6 +1250,7 @@
             if (!isAudioStreaming) { cleanupWebRTC(); }
             
             if (speechSynthesis.speaking && !isMuted) { speechSynthesis.cancel(); }
+            stopGeigerBeeps(); // Stop any active Geiger counter beeps
             updateStatus("Video streaming stopped");
         }
         
@@ -1277,12 +1320,31 @@
                 }
                 
                 if (!wasHandledAsPointCloud) {
-                    const textForDisplay = (typeof data.text === 'string') ? data.text : "";
-                    if (responseText) { 
-                        responseText.textContent = textForDisplay; 
-                    }
-                    if (textForDisplay.trim() !== "" && !isMuted) { 
-                        speakWithPanning(textForDisplay, -1); 
+                    // Check if data.text is a beep command
+                    if (typeof data.text === 'object' && data.text !== null && data.text.type === 'beep') {
+                        // Handle Geiger counter-style beeps
+                        const textForDisplay = data.text.text || "";
+                        if (responseText) { 
+                            responseText.textContent = textForDisplay; 
+                        }
+                        if (!isMuted) {
+                            // Speak the location once
+                            speakWithPanning(textForDisplay, -1);
+                            // Start the Geiger counter beeps
+                            if (data.text.beep_params) {
+                                startGeigerBeeps(data.text.beep_params);
+                            }
+                        }
+                    } else {
+                        // Regular text handling
+                        stopGeigerBeeps(); // Stop any ongoing beeps when switching to text
+                        const textForDisplay = (typeof data.text === 'string') ? data.text : "";
+                        if (responseText) { 
+                            responseText.textContent = textForDisplay; 
+                        }
+                        if (textForDisplay.trim() !== "" && !isMuted) { 
+                            speakWithPanning(textForDisplay, -1); 
+                        }
                     }
                 }
                 
@@ -1425,6 +1487,7 @@ Troubleshooting Tips:
         processorSelect.addEventListener('change', () => { 
             currentProcessor = parseInt(processorSelect.value); 
             updateStatus(`Selected processor: ${processorSelect.options[processorSelect.selectedIndex].text}`); 
+            stopGeigerBeeps(); // Stop beeps when switching processors
             if (dataChannel && dataChannel.readyState === 'open') {
                 dataChannel.send(JSON.stringify({ processor: currentProcessor }));
             }

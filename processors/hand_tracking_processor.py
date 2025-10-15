@@ -119,8 +119,8 @@ class HandTrackingProcessor(BaseProcessor):
             # Determine spatial location
             location = self._determine_location(offset_x, offset_y)
             
-            # Determine distance
-            distance = self._determine_distance(size_ratio)
+            # Determine distance and beep parameters
+            distance, beep_params = self._determine_distance(size_ratio)
             
             # Draw hand landmarks on output frame
             self.mp_drawing.draw_landmarks(
@@ -150,6 +150,7 @@ class HandTrackingProcessor(BaseProcessor):
                 },
                 "location": location,
                 "distance": distance,
+                "beep_params": beep_params,
                 "size_ratio": round(size_ratio, 3),
                 "landmarks": hand_landmarks  # Full landmark data for advanced use
             }
@@ -227,47 +228,62 @@ class HandTrackingProcessor(BaseProcessor):
         else:
             return "center"
     
-    def _determine_distance(self, size_ratio: float) -> str:
+    def _determine_distance(self, size_ratio: float) -> Tuple[str, Dict]:
         """
-        Determine relative distance based on hand size
+        Determine relative distance based on hand size and generate beep parameters
         
         Args:
             size_ratio: Hand area as ratio of frame area
             
         Returns:
-            String describing distance ("very close", "close", "medium", "far")
+            Tuple of (distance_category, beep_params)
+            - distance_category: String describing distance ("very close", "close", "medium", "far")
+            - beep_params: Dictionary with frequency and interval for Geiger counter-style beeps
         """
+        # Geiger counter style: closer = higher frequency beeps and shorter intervals
         if size_ratio > 0.25:
-            return "very close"
+            # Very close - rapid high-pitched beeps
+            return "very close", {"frequency": 1200, "interval": 0.1, "duration": 0.05}
         elif size_ratio > 0.12:
-            return "close"
+            # Close - moderate frequency and interval
+            return "close", {"frequency": 900, "interval": 0.25, "duration": 0.08}
         elif size_ratio > 0.05:
-            return "medium"
+            # Medium - slower beeps
+            return "medium", {"frequency": 600, "interval": 0.5, "duration": 0.1}
         else:
-            return "far"
+            # Far - slow low-pitched beeps
+            return "far", {"frequency": 400, "interval": 1.0, "duration": 0.12}
     
-    def _generate_message(self, hands_info: List[Dict]) -> str:
+    def _generate_message(self, hands_info: List[Dict]) -> Union[str, Dict]:
         """
-        Generate audio-friendly message about detected hands
+        Generate beep instructions for Geiger counter-style distance feedback
         
         Args:
             hands_info: List of hand information dictionaries
             
         Returns:
-            String message describing hand locations
+            Dictionary with beep instructions or string message if no hands detected
         """
         if not hands_info:
             return "No hands detected in view."
         
         if len(hands_info) == 1:
             hand = hands_info[0]
-            return f"{hand['handedness']} hand detected at {hand['location']}, distance {hand['distance']}."
+            # Return beep command with location description
+            return {
+                "type": "beep",
+                "text": f"{hand['handedness']} hand at {hand['location']}",
+                "beep_params": hand['beep_params']
+            }
         else:
-            # Multiple hands
-            hand_descriptions = []
-            for hand in hands_info:
-                hand_descriptions.append(f"{hand['handedness']} hand at {hand['location']}")
-            return f"{len(hands_info)} hands detected: {', '.join(hand_descriptions)}."
+            # Multiple hands - use closest hand's beep params
+            closest_hand = min(hands_info, key=lambda h: 1 - h['size_ratio'])  # Largest hand is closest
+            hand_descriptions = [f"{h['handedness']} hand at {h['location']}" for h in hands_info]
+            return {
+                "type": "beep",
+                "text": f"{len(hands_info)} hands: {', '.join(hand_descriptions)}",
+                "beep_params": closest_hand['beep_params']
+            }
     
     def get_hand_tracking_data(self, frame: np.ndarray) -> Dict:
         """
