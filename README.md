@@ -75,6 +75,22 @@ The system includes several processors, ordered by complexity:
 - **CPU-Only**: Fully compatible with CPU-only systems, no GPU required
 - **Documentation**: See [docs/camera_aiming_usage.md](docs/camera_aiming_usage.md) for detailed usage examples and integration guide
 
+### Hand Tracking Processor (ID: 14) 🆕
+- **Description**: Building block processor that detects and tracks hands in the camera view, providing spatial location feedback through non-visual audio cues
+- **Dependencies**: None (uses MediaPipe Hands for CPU-only hand detection)
+- **Use Case**: Hand-based navigation, gesture recognition foundation, interactive control for accessibility
+- **Reference**: Built as a reusable building block for other processors requiring hand detection and tracking
+- **Features**:
+  - 👋 **Hand Detection** - Detects up to 2 hands simultaneously with handedness (left/right) identification
+  - 📍 **Spatial Location** - Audio feedback for hand position (center, left, right, top, bottom, corners)
+  - 📏 **Distance Estimation** - Relative distance feedback (very close, close, medium, far)
+  - 🎯 **Positional Guidance** - Helps users center their hands in frame with directional cues
+  - 🖐️ **Landmark Data** - Full 21-point hand landmark data for advanced gesture recognition
+  - 🔧 **Building Block Design** - Other processors can call `get_hand_tracking_data()` to access detailed hand information
+- **CPU-Only**: Uses MediaPipe Hands (fully CPU-optimized), no GPU required
+- **Documentation**: See [docs/hand_tracking_quick_reference.md](docs/hand_tracking_quick_reference.md) for quick start and [docs/HAND_TRACKING_PROCESSOR.md](docs/HAND_TRACKING_PROCESSOR.md) for comprehensive guide
+- **Example**: [processors/hand_guidance_example_processor.py](processors/hand_guidance_example_processor.py) demonstrates how to use as a building block
+
 ## Setting Up Your Own Server
 
 ### Local Server Setup
