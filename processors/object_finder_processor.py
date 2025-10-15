@@ -75,11 +75,8 @@ class ObjectFinderProcessor(BaseProcessor):
         height, width = frame.shape[:2]
         output_frame = frame.copy()
         
-        # Step 1: Detect objects in the scene
-        _, detections = self.object_detector.process_frame(frame)
-        
-        # Parse detections (detections is a string of class names)
-        detected_objects = self._parse_detections(detections)
+        # Step 1: Detect objects in the scene with bounding boxes
+        detected_objects = self._get_object_detections(frame)
         
         # Step 2: Get hand tracking data
         hand_data = self.hand_tracker.get_hand_tracking_data(frame)
@@ -112,15 +109,7 @@ class ObjectFinderProcessor(BaseProcessor):
         
         return output_frame, result
     
-    def _parse_detections(self, detections_text: str) -> List[Dict]:
-        """
-        Parse detection results from YOLO processor
-        Note: The YOLOProcessor returns a simple text string of class names.
-        We need to use the raw model results for proper bounding boxes.
-        """
-        # For now, return empty list as we'll use the raw YOLO model directly
-        # This is a workaround since the existing YOLOProcessor doesn't return bbox data
-        return []
+
     
     def _get_object_detections(self, frame: np.ndarray) -> List[Dict]:
         """
@@ -180,10 +169,6 @@ class ObjectFinderProcessor(BaseProcessor):
                 - guidance_message: Text message for TTS
                 - pan_value: -1 (left) to 1 (right) for spatial audio
         """
-        # Get actual object detections with bounding boxes
-        detected_objects = self._get_object_detections(
-            np.zeros((frame_height, frame_width, 3), dtype=np.uint8)  # Dummy frame
-        )
         
         # Check if hand is detected
         if hand_data['hand_count'] == 0:
@@ -302,9 +287,6 @@ class ObjectFinderProcessor(BaseProcessor):
             Frame with visual overlays
         """
         output = frame.copy()
-        
-        # Get actual object detections
-        detected_objects = self._get_object_detections(frame)
         
         # Draw object bounding boxes
         for obj in detected_objects:
