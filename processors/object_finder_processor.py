@@ -70,7 +70,9 @@ class ObjectFinderProcessor(BaseProcessor):
             frame (numpy.ndarray): Input frame to process
             
         Returns:
-            tuple: (processed_frame, guidance_message_dict)
+            tuple: (processed_frame, guidance_message)
+                - processed_frame: Frame with visual indicators (optional)
+                - guidance_message: Simple message string for audio output
         """
         height, width = frame.shape[:2]
         output_frame = frame.copy()
@@ -82,7 +84,7 @@ class ObjectFinderProcessor(BaseProcessor):
         hand_data = self.hand_tracker.get_hand_tracking_data(frame)
         
         # Step 3: Generate guidance based on hand position and objects
-        guidance_message, pan_value = self._generate_guidance(
+        guidance_message = self._generate_guidance(
             hand_data, 
             detected_objects, 
             width, 
@@ -98,16 +100,8 @@ class ObjectFinderProcessor(BaseProcessor):
             height
         )
         
-        # Build response with spatial audio information
-        result = {
-            "message": guidance_message,
-            "pan": pan_value,  # -1 (left) to 1 (right) for spatial audio
-            "hand_detected": hand_data['hand_count'] > 0,
-            "objects_detected": len(detected_objects) > 0,
-            "object_count": len(detected_objects)
-        }
-        
-        return output_frame, result
+        # Return just the message string for clean audio output
+        return output_frame, guidance_message
     
 
     
@@ -154,9 +148,9 @@ class ObjectFinderProcessor(BaseProcessor):
                           hand_data: Dict, 
                           detected_objects: List[Dict],
                           frame_width: int,
-                          frame_height: int) -> Tuple[str, float]:
+                          frame_height: int) -> str:
         """
-        Generate audio guidance message and spatial audio pan value
+        Generate audio guidance message
         
         Args:
             hand_data: Hand tracking data from HandTrackingProcessor
@@ -165,27 +159,37 @@ class ObjectFinderProcessor(BaseProcessor):
             frame_height: Frame height in pixels
             
         Returns:
-            tuple: (guidance_message, pan_value)
-                - guidance_message: Text message for TTS
-                - pan_value: -1 (left) to 1 (right) for spatial audio
+            guidance_message: Text message for TTS
         """
         
         # Check if hand is detected
         if hand_data['hand_count'] == 0:
-            return "Show your hand to start finding objects.", 0.0
+            # List detected objects if any
+            if len(detected_objects) > 0:
+                object_names = [obj['class_name'] for obj in detected_objects]
+                unique_objects = list(set(object_names))
+                if len(unique_objects) == 1:
+                    return f"Show your hand to find the {unique_objects[0]}."
+                elif len(unique_objects) <= 3:
+                    objects_str = ", ".join(unique_objects)
+                    return f"Show your hand to find objects. I see: {objects_str}."
+                else:
+                    return f"Show your hand to find objects. I see {len(unique_objects)} different objects."
+            return "Show your hand to start finding objects."
         
         # Check if objects are detected
         if len(detected_objects) == 0:
-            return "No objects detected. Move camera to scan the area.", 0.0
+            return "No objects detected. Move camera to scan the area."
         
         # Get hand position (use index finger tip or hand center)
         hand = hand_data['hands'][0]
         hand_pixel_x = hand['center']['pixel_x']
         hand_pixel_y = hand['center']['pixel_y']
         
-        # Find closest object to hand
+        # Find closest object to hand and get info about nearby objects
         closest_object = None
         min_distance = float('inf')
+        nearby_objects = []  # Objects within reasonable distance
         
         for obj in detected_objects:
             obj_center = obj['center']
@@ -194,26 +198,38 @@ class ObjectFinderProcessor(BaseProcessor):
                 (hand_pixel_y - obj_center[1])**2
             )
             
+            # Track closest object
             if distance < min_distance:
                 min_distance = distance
                 closest_object = obj
+            
+            # Track nearby objects (within 2x the guidance threshold)
+            if distance < self.guidance_threshold * 3:
+                nearby_objects.append({
+                    'object': obj,
+                    'distance': distance
+                })
         
         if closest_object is None:
-            return "Objects detected. Show your hand to locate them.", 0.0
+            return "Objects detected. Show your hand to locate them."
         
-        # Calculate direction and distance to object
+        # Sort nearby objects by distance
+        nearby_objects.sort(key=lambda x: x['distance'])
+        
+        # Calculate direction and distance to closest object
         obj_center = closest_object['center']
         dx = obj_center[0] - hand_pixel_x
         dy = obj_center[1] - hand_pixel_y
         
-        # Calculate spatial audio pan (-1 left to 1 right)
-        # Normalize by half frame width
-        pan_value = np.clip(dx / (frame_width / 2), -1.0, 1.0)
-        
         # Check if hand has reached the object
         if min_distance < self.guidance_threshold:
             message = f"Object reached! {closest_object['class_name']} is right there."
-            return message, pan_value
+            # Add info about other nearby objects if any
+            other_nearby = [n for n in nearby_objects if n['object']['class_name'] != closest_object['class_name']]
+            if len(other_nearby) > 0:
+                other_names = [n['object']['class_name'] for n in other_nearby[:2]]  # Max 2 others
+                message += f" Also nearby: {', '.join(other_names)}."
+            return message
         
         # Generate directional guidance
         direction_parts = []
@@ -232,15 +248,26 @@ class ObjectFinderProcessor(BaseProcessor):
             else:
                 direction_parts.append("up")
         
-        # Build message
+        # Build message with object identification
+        distance_description = self._describe_distance(min_distance, frame_width, frame_height)
+        
         if len(direction_parts) == 0:
             message = f"Almost there! {closest_object['class_name']} is very close."
         else:
             direction_str = " and ".join(direction_parts)
-            distance_description = self._describe_distance(min_distance, frame_width, frame_height)
             message = f"Move hand {direction_str}. {closest_object['class_name']} is {distance_description}."
         
-        return message, pan_value
+        # Add info about other nearby objects if there are multiple close by
+        if len(nearby_objects) > 1:
+            other_objects = [n['object']['class_name'] for n in nearby_objects[1:3] if n['object']['class_name'] != closest_object['class_name']]
+            if other_objects:
+                unique_others = list(set(other_objects))
+                if len(unique_others) == 1:
+                    message += f" {unique_others[0]} also nearby."
+                else:
+                    message += f" Also nearby: {', '.join(unique_others[:2])}."
+        
+        return message
     
     def _describe_distance(self, distance: float, frame_width: int, frame_height: int) -> str:
         """

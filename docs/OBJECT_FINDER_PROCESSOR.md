@@ -30,10 +30,9 @@ The Object Finder Processor helps blind and low vision users locate and reach ob
 from processors.object_finder_processor import ObjectFinderProcessor
 
 processor = ObjectFinderProcessor()
-output_frame, result = processor.process_frame(frame)
+output_frame, message = processor.process_frame(frame)
 
-print(result['message'])  # "Move hand right. Cup is medium distance."
-print(result['pan'])      # 0.5 (spatial audio position)
+print(message)  # "Move hand right. Cup is medium distance."
 ```
 
 ### Configuration Options
@@ -50,31 +49,34 @@ processor = ObjectFinderProcessor(
 
 ### No Hand Detected
 - "Show your hand to start finding objects."
+- "Show your hand to find the cup." (when single object detected)
+- "Show your hand to find objects. I see: cup, phone, book." (when multiple objects detected)
 
 ### No Objects Detected
 - "No objects detected. Move camera to scan the area."
 
 ### Guidance Messages
 - "Move hand right. Cup is medium distance."
-- "Move hand left and down. Book is far away."
+- "Move hand left and down. Book is far away. Phone also nearby."
 - "Almost there! Phone is very close."
 
 ### Reached Object
 - "Object reached! Cup is right there."
+- "Object reached! Cup is right there. Also nearby: phone."
 
 ## Response Format
 
-The processor returns a dictionary with:
+The processor returns a simple text message string for clean audio output:
 
 ```python
-{
-    "message": "Move hand right. Cup is medium distance.",
-    "pan": 0.5,                    # -1 (left) to 1 (right) for spatial audio
-    "hand_detected": True,          # Whether a hand is detected
-    "objects_detected": True,       # Whether objects are detected
-    "object_count": 3              # Number of objects detected
-}
+output_frame, message = processor.process_frame(frame)
+# message is a string like: "Move hand right. Cup is medium distance."
 ```
+
+The message includes:
+- Directional guidance to the closest object
+- Identification of which specific object is being targeted
+- Information about other nearby objects when multiple items are present
 
 ## Visual Feedback
 
@@ -103,28 +105,20 @@ The processor provides directional guidance based on the offset between hand and
 - **Vertical**: "up" or "down" if offset > 30 pixels
 - **Combined**: "left and down", "right and up", etc.
 
-## Spatial Audio
+## Object Identification
 
-The `pan` value in the response indicates the stereo position:
+The processor now provides clear identification of which objects are present:
 
-- **-1.0**: Far left
-- **-0.5**: Left
-- **0.0**: Center
-- **0.5**: Right
-- **1.0**: Far right
+- **Single Object**: "Show your hand to find the cup."
+- **Multiple Objects**: "Show your hand to find objects. I see: cup, phone, book."
+- **During Guidance**: "Move hand right. Cup is medium distance. Phone also nearby."
+- **At Reach**: "Object reached! Cup is right there. Also nearby: phone."
 
-This can be used by the audio system to pan the TTS output, helping users locate objects by sound direction.
+This helps users understand what objects are available and make informed decisions about which items to retrieve.
 
 ## Integration with Web Client
 
-The web client (`client/screen_wss.html`) can use the `pan` value to provide spatial audio feedback:
-
-```javascript
-// Example usage in web client
-if (result.pan !== undefined) {
-    playAudioWithPanning(audioData, result.pan);
-}
-```
+The web client (`client/screen_wss.html`) receives the message as a simple string and reads it via text-to-speech. The message automatically includes all necessary information about object identification and nearby alternatives.
 
 ## Processor Configuration
 

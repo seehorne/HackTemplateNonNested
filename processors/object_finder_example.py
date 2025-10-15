@@ -46,38 +46,35 @@ class ObjectFinderExampleProcessor(BaseProcessor):
             frame: Input frame from camera
             
         Returns:
-            tuple: (output_frame, enhanced_result)
+            tuple: (output_frame, enhanced_message)
         """
         # Get base guidance from object finder
-        output_frame, result = self.object_finder.process_frame(frame)
+        output_frame, message = self.object_finder.process_frame(frame)
         
         # Enhance the message for first-time users
         if self.first_use:
-            if result['hand_detected']:
+            if "Move hand" in message or "Almost there" in message:
                 self.first_use = False
-                result['message'] = (
-                    "Welcome! I'll help you find objects. " + 
-                    result['message']
-                )
+                message = "Welcome! I'll help you find objects. " + message
         
         # Track reached objects
-        if "Object reached!" in result['message']:
+        if "Object reached!" in message:
             # Extract object name (simple parsing)
-            parts = result['message'].split()
+            parts = message.split()
             if len(parts) >= 3:
                 object_name = parts[2]  # "Object reached! Cup is..."
                 if object_name not in self.objects_reached:
                     self.objects_reached.append(object_name)
-                    result['message'] += f" You've found {len(self.objects_reached)} objects so far."
+                    message += f" You've found {len(self.objects_reached)} objects so far."
         
         # Add helpful tips based on state
-        if not result['hand_detected'] and result['objects_detected']:
-            result['message'] += " Tip: Hold your hand in front of the camera to start."
+        if "Show your hand" in message:
+            message += " Tip: Hold your hand in front of the camera to start."
         
-        if result['hand_detected'] and not result['objects_detected']:
-            result['message'] += " Tip: Move the camera slowly to scan for objects."
+        if "No objects detected" in message:
+            message += " Tip: Move the camera slowly to scan for objects."
         
-        return output_frame, result
+        return output_frame, message
     
     def process_pointcloud(self, point_cloud_data: Dict) -> Tuple[Optional[Dict], Union[str, Dict]]:
         """Point cloud processing not implemented"""
