@@ -138,5 +138,15 @@
     "expects_input": "image",
     "description": "Helps users who are blind or low vision aim their camera to center objects using non-visual audio cues. Building block for other processors.",
     "enabled": true
+  },
+  "14": {
+    "host": "127.0.0.1",
+    "port": 8015,
+    "name": "hand_tracking_processor",
+    "conda_env": "whatsai",
+    "dependencies": [],
+    "expects_input": "image",
+    "description": "Detects and tracks hands in the camera view, providing spatial location feedback through non-visual audio cues. Building block for other processors requiring hand detection.",
+    "enabled": true
   }
 }
