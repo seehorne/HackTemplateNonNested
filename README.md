@@ -91,6 +91,26 @@ The system includes several processors, ordered by complexity:
 - **Documentation**: See [docs/hand_tracking_quick_reference.md](docs/hand_tracking_quick_reference.md) for quick start and [docs/HAND_TRACKING_PROCESSOR.md](docs/HAND_TRACKING_PROCESSOR.md) for comprehensive guide
 - **Example**: [processors/hand_guidance_example_processor.py](processors/hand_guidance_example_processor.py) demonstrates how to use as a building block
 
+### Object Finder Processor (ID: 15) 🆕
+- **Description**: Helps blind users find and reach objects with their hands using non-visual audio cues
+- **Dependencies**: Uses Hand Tracking Processor (ID: 14) and Scene Object Processor (ID: 4) as building blocks
+- **Use Case**: Object retrieval assistance for blind and low vision users
+- **Features**:
+  - 🎯 **Hand-to-Object Guidance** - Provides directional cues to guide user's hand to detected objects
+  - 🏷️ **Object Identification** - Identifies which specific object the hand is near and lists nearby alternatives
+  - 📏 **Distance Feedback** - Tells user how far their hand is from target object (very close, close, medium, far)
+  - ✅ **Reach Confirmation** - Announces when hand reaches the target object
+  - 📝 **Multiple Object Awareness** - Lists detected objects when hand not shown, mentions nearby objects during guidance
+  - 🔧 **Building Block Integration** - Demonstrates how to combine multiple building block processors
+- **CPU-Only**: Leverages CPU-optimized MediaPipe Hands and YOLO11 models
+- **How It Works**: 
+  1. Detects objects in camera view using YOLO11
+  2. Lists detected objects when no hand shown: "Show your hand to find objects. I see: cup, phone, book."
+  3. Tracks user's hand position using MediaPipe
+  4. Calculates direction and distance from hand to closest object
+  5. Provides real-time audio guidance: "Move hand right. Cup is medium distance. Phone also nearby."
+  6. Announces when object is reached: "Object reached! Cup is right there. Also nearby: phone."
+
 ## Setting Up Your Own Server
 
 ### Local Server Setup

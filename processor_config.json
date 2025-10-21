@@ -148,5 +148,15 @@
     "expects_input": "image",
     "description": "Detects and tracks hands in the camera view, providing spatial location feedback through non-visual audio cues. Building block for other processors requiring hand detection.",
     "enabled": true
+  },
+  "15": {
+    "host": "127.0.0.1",
+    "port": 8016,
+    "name": "object_finder_processor",
+    "conda_env": "whatsai",
+    "dependencies": [],
+    "expects_input": "image",
+    "description": "Helps blind users find and reach objects using their hands. Combines hand tracking and object detection to provide directional audio guidance (left, right, up, down, closer) with spatial audio cues.",
+    "enabled": true
   }
 }
