@@ -111,6 +111,23 @@ The system includes several processors, ordered by complexity:
   5. Provides real-time audio guidance: "Move hand right. Cup is medium distance. Phone also nearby."
   6. Announces when object is reached: "Object reached! Cup is right there. Also nearby: phone."
 
+### Audio Feedback Processor (ID: 16) 🆕
+- **Description**: Building block processor for generating non-verbal audio feedback (beeps, tones, varying pitch/frequency)
+- **Dependencies**: None (pure NumPy audio generation)
+- **Use Case**: Provides reusable audio feedback capabilities for other processors requiring non-verbal cues
+- **Reference**: Built as a reusable building block for accessibility-focused processors
+- **Features**:
+  - 🔊 **Multiple Audio Types** - Beeps, tones, frequency sweeps, pulses, Geiger counter-style clicks
+  - 🎵 **Configurable Parameters** - Adjustable frequency (20-20000 Hz), duration, intensity
+  - 🎯 **Ready Presets** - Pre-configured audio for scanning, proximity, alignment, success, warning, error
+  - 📏 **Proximity Feedback** - Distance-based audio with varying intensity and frequency
+  - 📐 **Alignment Feedback** - Audio cues for centering and positioning tasks
+  - 🔧 **Building Block Design** - Other processors can call `generate_audio_feedback()` and helper methods
+  - 🎨 **Pattern Support** - Create complex audio patterns with pauses and repetitions
+- **CPU-Only**: Pure NumPy-based audio generation, no external libraries or GPU required
+- **Documentation**: See [docs/AUDIO_FEEDBACK_PROCESSOR.md](docs/AUDIO_FEEDBACK_PROCESSOR.md) for comprehensive guide and examples
+- **Example**: [processors/audio_feedback_example_processor.py](processors/audio_feedback_example_processor.py) demonstrates integration
+
 ## Setting Up Your Own Server
 
 ### Local Server Setup
