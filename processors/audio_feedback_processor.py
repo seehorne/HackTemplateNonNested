@@ -52,16 +52,26 @@ class AudioFeedbackProcessor(BaseProcessor):
         
     def process_frame(self, frame: np.ndarray) -> Tuple[Optional[np.ndarray], Union[str, Dict]]:
         """
-        Process frame - for audio feedback processor, this is a pass-through
+        Process frame - generates a demo beep to demonstrate the audio feedback
         
         Args:
             frame (numpy.ndarray): Input frame to process
             
         Returns:
-            tuple: (original_frame, message)
+            tuple: (original_frame, result_with_audio)
         """
+        # Generate a demo beep to show that the processor is working
+        audio_data = self.generate_audio_feedback(
+            audio_type=self.AUDIO_TYPE_BEEP,
+            frequency=440,
+            duration=0.2,
+            intensity=0.5
+        )
+        
         return frame, {
-            "message": "Audio Feedback Processor - use generate_audio_feedback() method for audio generation",
+            "message": "Audio Feedback Processor - Demo beep generated",
+            "audio": audio_data,
+            "info": "This processor generates non-verbal audio feedback. Use generate_audio_feedback() method for custom audio.",
             "available_types": [
                 self.AUDIO_TYPE_BEEP,
                 self.AUDIO_TYPE_TONE,

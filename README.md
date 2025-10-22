@@ -126,7 +126,19 @@ The system includes several processors, ordered by complexity:
   - 🎨 **Pattern Support** - Create complex audio patterns with pauses and repetitions
 - **CPU-Only**: Pure NumPy-based audio generation, no external libraries or GPU required
 - **Documentation**: See [docs/AUDIO_FEEDBACK_PROCESSOR.md](docs/AUDIO_FEEDBACK_PROCESSOR.md) for comprehensive guide and examples
-- **Example**: [processors/audio_feedback_example_processor.py](processors/audio_feedback_example_processor.py) demonstrates integration
+- **Note**: When used directly, generates a demo beep to show it's working
+
+### Audio Feedback Example Processor (ID: 17) 🆕
+- **Description**: Example demonstrating how to use AudioFeedbackProcessor as a building block
+- **Dependencies**: Uses Audio Feedback Processor (ID: 16) and YOLO for object detection
+- **Use Case**: Shows integration pattern for audio feedback in custom processors
+- **Features**:
+  - 🎯 **Object Detection** - Detects objects using YOLO
+  - 📏 **Proximity Audio** - Generates audio based on object distance
+  - 📐 **Centering Audio** - Provides alignment feedback when object is centered
+  - 🔧 **Integration Example** - Demonstrates building block usage pattern
+- **CPU-Only**: Uses CPU-optimized YOLO and pure NumPy audio
+- **Reference**: See [processors/audio_feedback_example_processor.py](processors/audio_feedback_example_processor.py) for code
 
 ## Setting Up Your Own Server
 
