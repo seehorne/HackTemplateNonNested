@@ -727,6 +727,15 @@
             });
         }
         
+        function base64ToBlob(base64, mimeType) {
+            const binaryString = atob(base64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return new Blob([bytes], { type: mimeType });
+        }
+        
         function audioBufferToWav(buffer) {
             const numChannels = buffer.numberOfChannels;
             const sampleRate = buffer.sampleRate;
@@ -1589,16 +1598,44 @@
                     }
                 }
                 if (!wasHandledAsPointCloud) {
-                    // Handle different text formats
+                    // Check if the response contains audio feedback data (from audio feedback processors)
+                    let hasAudioFeedback = false;
+                    if (typeof data.text === 'object' && data.text !== null && data.text.audio) {
+                        // Handle audio feedback from processors that return audio data
+                        try {
+                            const audioInfo = data.text.audio;
+                            if (audioInfo.audio_data && audioInfo.format === 'wav') {
+                                // Decode base64 WAV data and play it
+                                const audioBlob = base64ToBlob(audioInfo.audio_data, 'audio/wav');
+                                const audioUrl = URL.createObjectURL(audioBlob);
+                                const audio = new Audio(audioUrl);
+                                audio.onended = () => URL.revokeObjectURL(audioUrl);
+                                audio.play().catch(err => console.error('Error playing audio feedback:', err));
+                                hasAudioFeedback = true;
+                            }
+                        } catch (error) {
+                            console.error('Error handling audio feedback:', error);
+                        }
+                    }
+                    
+                    // Handle text display and speech
                     let textForDisplay = "";
                     if (typeof data.text === 'string') {
                         textForDisplay = data.text;
                     } else if (typeof data.text === 'object' && data.text !== null) {
-                        // Extract text from dict response (e.g., from SeeingAI processor with out-of-view detection)
-                        textForDisplay = data.text.text || data.text.full_text || JSON.stringify(data.text);
+                        // Extract text message (prioritize 'message' field for audio feedback processors)
+                        if (data.text.message) {
+                            textForDisplay = data.text.message;
+                        } else {
+                            // Extract text from dict response (e.g., from SeeingAI processor with out-of-view detection)
+                            textForDisplay = data.text.text || data.text.full_text || JSON.stringify(data.text);
+                        }
                     }
                     if (responseText) { responseText.textContent = textForDisplay; }
-                    if (textForDisplay.trim() !== "" && !isMuted) { speakWithPanning(textForDisplay, -1); }
+                    // Only speak text if no audio feedback was played (to avoid overlap)
+                    if (textForDisplay.trim() !== "" && !isMuted && !hasAudioFeedback) { 
+                        speakWithPanning(textForDisplay, -1); 
+                    }
                 }
                 if (data.status && data.status.includes('audio')) { updateStatus(data.status); }
                 if (isStreaming && !isWaitingForResponse) { setTimeout(captureAndSendFrame, 100); }

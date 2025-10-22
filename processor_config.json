@@ -158,5 +158,25 @@
     "expects_input": "image",
     "description": "Helps blind users find and reach objects using their hands. Combines hand tracking and object detection to provide directional audio guidance (left, right, up, down, closer) with spatial audio cues.",
     "enabled": true
+  },
+  "16": {
+    "host": "127.0.0.1",
+    "port": 8017,
+    "name": "audio_feedback_processor",
+    "conda_env": "whatsai",
+    "dependencies": [],
+    "expects_input": "image",
+    "description": "Building block processor for generating non-verbal audio feedback (beeps, tones, sweeps, pulses, geiger-style clicks). Provides proximity, alignment, and status audio cues that other processors can integrate.",
+    "enabled": true
+  },
+  "17": {
+    "host": "127.0.0.1",
+    "port": 8018,
+    "name": "audio_feedback_example_processor",
+    "conda_env": "whatsai",
+    "dependencies": [],
+    "expects_input": "image",
+    "description": "Example processor demonstrating how to use AudioFeedbackProcessor as a building block. Detects objects and provides audio feedback based on proximity and centering.",
+    "enabled": true
   }
 }
