@@ -140,6 +140,39 @@ The system includes several processors, ordered by complexity:
 - **CPU-Only**: Uses CPU-optimized YOLO and pure NumPy audio
 - **Reference**: See [processors/audio_feedback_example_processor.py](processors/audio_feedback_example_processor.py) for code
 
+### Speech Input Processor (ID: 18) 🆕
+- **Description**: Building block processor for speech-to-text input using voice (speech recognition)
+- **Dependencies**: None (uses Vosk for CPU-only offline speech recognition)
+- **Use Case**: Provides reusable speech input capabilities for other processors requiring voice commands, dictation, or verbal navigation
+- **Reference**: Built as a reusable building block for processors needing speech-based user input
+- **Features**:
+  - 🎤 **Offline Recognition** - CPU-only speech-to-text without internet connection (after model download)
+  - 🌍 **Multiple Languages** - Support for 10+ languages including English, Spanish, French, German, etc.
+  - 📊 **Confidence Scores** - Word-level and overall confidence metrics
+  - ⏱️ **Word Timestamps** - Detailed timing information for each recognized word
+  - 🎯 **Voice Commands** - Built-in command handler for voice-controlled applications
+  - 🔧 **Building Block Design** - Other processors can call `recognize_speech()` to add voice input
+  - 📝 **Multiple Modes** - Single command, continuous, and dictation modes
+- **CPU-Only**: Uses Vosk offline speech recognition, fully CPU-optimized, no GPU required
+- **Documentation**: See [docs/SPEECH_INPUT_PROCESSOR.md](docs/SPEECH_INPUT_PROCESSOR.md) for comprehensive guide and [docs/speech_input_quick_reference.md](docs/speech_input_quick_reference.md) for quick start
+- **Note**: Requires downloading a Vosk model (~50MB for small, ~1.5GB for large) on first use. See documentation for download instructions.
+
+### Speech Command Example Processor (ID: 19) 🆕
+- **Description**: Example demonstrating how to use SpeechInputProcessor as a building block
+- **Dependencies**: Uses Speech Input Processor (ID: 18) as a building block
+- **Use Case**: Shows how to create voice-controlled image processing applications
+- **Features**:
+  - 🎤 **Voice Commands** - Control image filters using voice (grayscale, blur, edge, invert)
+  - 🔧 **Integration Example** - Demonstrates speech input building block usage pattern
+  - 🎯 **Command Matching** - Shows how to map voice commands to actions
+- **CPU-Only**: Leverages CPU-optimized Vosk speech recognition
+- **How It Works**:
+  1. Accepts voice commands like "grayscale", "blur", "edge", "invert"
+  2. Uses SpeechInputProcessor to recognize speech
+  3. Applies corresponding image filter based on command
+  4. Provides visual feedback of current filter state
+- **Reference**: See [processors/speech_command_example_processor.py](processors/speech_command_example_processor.py) for code
+
 ## Setting Up Your Own Server
 
 ### Local Server Setup
