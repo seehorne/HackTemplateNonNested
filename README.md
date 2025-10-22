@@ -60,6 +60,24 @@ The system includes several processors, ordered by complexity:
     - Queue and current speech checking to avoid duplicates
 - **Note**: First-time startup may take longer as EasyOCR downloads models automatically
 
+### Speech Input Processor (ID: 13) - Building Block
+- **Description**: CPU-only speech-to-text processor using Whisper (distil-whisper)
+- **Dependencies**: None
+- **Use Case**: Building block for other processors to add voice input capabilities
+- **Reference**: Based on OpenAI Whisper - https://github.com/openai/whisper
+- **Features**:
+  - ⭐ **CPU-Only Processing** - No GPU required, uses distil-whisper for efficient inference
+  - ⭐ **Building Block Design** - Can be imported and used by other processors
+  - ⭐ **Custom Audio Endpoint** - Provides `/transcribe` endpoint for direct audio transcription
+  - ⭐ **Reusable Helper Module** - Includes `SpeechInputHelper` class for easy integration
+  - ⭐ **Voice Command Support** - Optional `VoiceCommandProcessor` for command-based interactions
+- **Note**: First-time startup downloads the Whisper model automatically
+- **Usage Examples**:
+  - Standalone: Send audio to `http://localhost:8014/transcribe` endpoint
+  - As building block: Import `SpeechInputHelper` from `processors.speech_input_building_block`
+  - Voice commands: Use `VoiceCommandProcessor` for command detection and execution
+
+
 ## Setting Up Your Own Server
 
 ### Local Server Setup

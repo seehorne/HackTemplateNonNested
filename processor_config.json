@@ -128,5 +128,15 @@
     "expects_input": "image",
     "description": "Extracts short text from images similar to SeeingAI, using CPU-only OCR.",
     "enabled": true
+  },
+  "13": {
+    "host": "127.0.0.1",
+    "port": 8014,
+    "name": "speech_input_processor",
+    "conda_env": "whatsai",
+    "dependencies": [],
+    "expects_input": "audio",
+    "description": "Building block processor for speech-to-text input using Whisper (CPU-only). Can be used by other processors to accept voice input.",
+    "enabled": true
   }
 }

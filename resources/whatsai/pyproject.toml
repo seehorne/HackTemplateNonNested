@@ -32,7 +32,12 @@ dependencies = [
     "timm",
     "einops",
     "opencv-contrib-python",
-    "easyocr"
+    "easyocr",
+    # Speech recognition dependencies
+    "torch",
+    "torchaudio",
+    "accelerate",
+    "librosa"
 ]
 
 [project.urls]
