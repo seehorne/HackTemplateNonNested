@@ -76,6 +76,11 @@ The system includes several processors, ordered by complexity:
   - Standalone: Send audio to `http://localhost:8014/transcribe` endpoint
   - As building block: Import `SpeechInputHelper` from `processors.speech_input_building_block`
   - Voice commands: Use `VoiceCommandProcessor` for command detection and execution
+- **Documentation**:
+  - 📖 [Quick Start Guide](SPEECH_INPUT_QUICKSTART.md) - Get started in 5 minutes
+  - 📚 [Developer Guide](SPEECH_INPUT_GUIDE.md) - Comprehensive integration guide
+  - 💡 Example processor: `processors/voice_controlled_example_processor.py`
+
 
 
 ## Setting Up Your Own Server
