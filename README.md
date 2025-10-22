@@ -222,7 +222,40 @@ If you see errors like "Could not connect to the processor" for any processor:
 
 **Common fixes:**
 - For SeeingAI processor: Ensure EasyOCR is available in the whatsai conda environment
+- For Speech Input processor: Ensure Vosk model is downloaded (see Speech Input Processor Issues below)
 - For other processors: Check the processor's specific dependencies in `resources/whatsai/pyproject.toml`
+
+### Speech Input Processor Issues
+
+The Speech Input processor (ID: 18) requires a Vosk model to be downloaded before first use:
+
+- **Model not found error**: Download a Vosk speech recognition model
+  - Visit https://alphacephei.com/vosk/models
+  - Download a model for your language (e.g., `vosk-model-small-en-us-0.15.zip` for English)
+  - Extract to `models/vosk/` directory
+  - Example for small English model (~50MB):
+    ```bash
+    cd models && mkdir -p vosk && cd vosk
+    wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+    unzip vosk-model-small-en-us-0.15.zip
+    ```
+- **Model size recommendations**:
+  - ⚡ **Small models (~50MB)**: Fast, good for voice commands, lower accuracy
+  - 🎯 **Large models (~1.5GB)**: Slower, excellent for dictation, higher accuracy
+- **Poor recognition quality**:
+  - Use a larger model for better accuracy
+  - Ensure audio quality is good (16kHz, 16-bit mono recommended)
+  - Reduce background noise
+  - Speak clearly at normal pace
+- **Slow performance**:
+  - Use smaller model
+  - Process shorter audio chunks
+  - Enable partial results for faster feedback
+- **Missing dependency**: If you see import errors, install Vosk:
+  ```bash
+  conda run -n whatsai pip install vosk
+  ```
+- **Documentation**: See [docs/SPEECH_INPUT_PROCESSOR.md](docs/SPEECH_INPUT_PROCESSOR.md) for comprehensive guide
 
 ### SeeingAI Short Text Processor Issues
 
